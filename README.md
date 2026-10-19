@@ -29,14 +29,14 @@ Intelligent WhatsApp message routing bot powered by AI that can forward, summari
 - implement cron job batch processing and cleanup with customisable time period
 
 ## Limitation
-AI Vision currently not supported. Meaning any media message (image, video, documents) will not be processed directly to the AI.
+AI Vision is not supported in the meantime. Meaning any media message (image, video, documents) will not be processed directly to the AI.
 The model can still see that there is a media message present but is unable to process what is inside.
-The model can still forward or send the media message itself with the help of the file name and the unsent messages around it as additional context.
+The model can still forward or send the media message itself with the help of the file name and the unsent messages around it as additional context. (After two weeks of testing, the model 96.8% (31 out of 32) recognize and forward images and files correctly)
 
 ## Next Fix & Update
 - Code refactor
 - Cleanup saved files
-- Assess if AI Vision support is viable
+- Adding sent chat history for model context
 
 ---
 
