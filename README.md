@@ -1,4 +1,4 @@
-# AutoForward v2.1b
+# AutoForward v2.1 Stable
 
 Intelligent WhatsApp message routing bot powered by AI that can forward, summarize, or send files between groups based on customizable rules. Built with TypeScript and MySQL, it features sophisticated message analysis, batch processing, and complete media support (AI Vision is currently not supported.).
 
