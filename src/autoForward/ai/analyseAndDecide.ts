@@ -3,6 +3,85 @@ import type { aiReadyFormatter } from "../../helper/aiReadyFormatter.ts";
 import { modelProvider, prismaStorage } from "../../../index.ts";
 import { forwardMessages, sendMediaWithCaption, writeMessages } from "../message/messageSender.ts";
 import type { WAMessage } from "@whiskeysockets/baileys";
+import { notifyAdmin } from "../../helper/notifyAdmin.js";
+
+type ForwardContext = Awaited<ReturnType<typeof aiReadyFormatter>>
+
+/**
+ * Returns the message IDs supplied by the LLM that do not belong to the current forward item.
+ * Those IDs would otherwise allow grabbing messages from another chat.
+ */
+function getOutOfBoundsMessageIds(truthObject: ForwardContext, LLMMessageIds: number[]): number[] {
+    const truthChatIds = new Set(truthObject.forwardItem.chats.map(chat => chat.id))
+    return LLMMessageIds.filter(LLMId => !truthChatIds.has(LLMId))
+}
+
+/**
+ * Returns the media paths supplied by the LLM that do not belong to the current forward item.
+ * Those paths would otherwise allow reading arbitrary files from the storage directory.
+ */
+function getUnknownMediaPaths(truthObject: ForwardContext, LLMMediaPaths: string[]): string[] {
+    const truthMediaPaths = new Set(
+        truthObject.forwardItem.chats
+            .map(chat => chat.mediaPath)
+            .filter((mediaPath): mediaPath is string => Boolean(mediaPath))
+    )
+
+    return LLMMediaPaths.filter(mediaPath => !truthMediaPaths.has(mediaPath))
+}
+
+/**
+ * to check wether LLM tried to reference non permitted message ids
+ */
+function isPathExfiltration(truthObject: ForwardContext, LLMMessageIds: number[]) {
+    return getOutOfBoundsMessageIds(truthObject, LLMMessageIds).length > 0
+}
+
+/**
+ * Notifies the admin that an LLM tool call was blocked because it referenced
+ * message IDs (or media paths) that are outside the current forward item.
+ */
+function notifyPathExfiltrationBlocked(
+    truthObject: ForwardContext,
+    toolName: string,
+    referencedMessageIds: number[],
+    unknownMediaPaths: string[] = []
+) {
+    const permittedIds = truthObject.forwardItem.chats.map(chat => chat.id)
+    const outOfBoundsIds = getOutOfBoundsMessageIds(truthObject, referencedMessageIds)
+
+    const reasons: string[] = []
+    if (outOfBoundsIds.length > 0) reasons.push("message IDs outside the permitted range")
+    if (unknownMediaPaths.length > 0) reasons.push("media paths outside the permitted set")
+
+    const lines = [
+        "*LLM Path Exfiltration Blocked*",
+        "",
+        `Action: ${toolName}`,
+        `Forward: ${truthObject.forwardItem.fromGroup} -> ${truthObject.forwardItem.sendToGroup}`,
+        "",
+        `The LLM's ${toolName} request was blocked because it referenced ${reasons.join(" and ")}.`,
+        "",
+        `Source group: ${truthObject.forwardItem.fromGroup}`,
+        `Permitted message IDs: ${permittedIds.join(", ")}`,
+        `Message IDs referenced by the LLM: ${referencedMessageIds.join(", ") || "none"}`
+    ]
+
+    if (outOfBoundsIds.length > 0) {
+        lines.push(`Out-of-bounds message IDs: ${outOfBoundsIds.join(", ")}`)
+    }
+
+    if (unknownMediaPaths.length > 0) {
+        lines.push(`Unknown media paths: ${unknownMediaPaths.join(", ")}`)
+    }
+
+    lines.push(
+        "",
+        "If this keeps happening, review this forward item's rules for any chat that contains referencing instructions. This guardrail has prevented random messages from being forwarded."
+    )
+
+    notifyAdmin(lines.join("\n"))
+}
 
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     {
@@ -348,9 +427,16 @@ CRITICAL RULES:
             switch (functionName) {
                 case "forwardMessages":
                     const messageIds = args.messageIds as number[]
+
+                    // Path exfiltration guardrail: never trust message IDs coming from the LLM
+                    if (isPathExfiltration(object, messageIds)) {
+                        notifyPathExfiltrationBlocked(object, "forwardMessages", messageIds)
+                        break
+                    }
+
                     const chats = await prismaStorage.getChatsByIds(messageIds)
                     const msgs = chats.map(chat => chat.msg as unknown as WAMessage)
-                    
+
                     console.log(`[AnalyseAndDecide] Forwarding ${msgs.length} message(s)`)
                     await forwardMessages(msgs, object.forwardItem.sendToGroupId)
                     
@@ -362,7 +448,13 @@ CRITICAL RULES:
                 case "writeMessages":
                     const texts = args.texts as string[]
                     const sourceMessageIds = args.sourceMessageIds as number[] | undefined
-    
+
+                    // Path exfiltration guardrail: never trust message IDs coming from the LLM
+                    if (isPathExfiltration(object, sourceMessageIds ?? [])) {
+                        notifyPathExfiltrationBlocked(object, "writeMessages", sourceMessageIds ?? [])
+                        break
+                    }
+
                     console.log(`[AnalyseAndDecide] Sending ${texts.length} text(s)`)
                     await writeMessages(texts, object.forwardItem.sendToGroupId)
                     
@@ -376,7 +468,16 @@ CRITICAL RULES:
                 case "writeMessagesWithMedia":
                     const rawItems = args.mediaItems as {mediaPath: string, caption: string}[]
                     const mediaSourceMessageIds = args.sourceMessageIds as number[] | undefined
-                    
+
+                    // Path exfiltration guardrail: never trust message IDs or media paths coming from the LLM
+                    const referencedMediaPaths = rawItems.map(item => item.mediaPath)
+                    const unknownMediaPaths = getUnknownMediaPaths(object, referencedMediaPaths)
+
+                    if (isPathExfiltration(object, mediaSourceMessageIds ?? []) || unknownMediaPaths.length > 0) {
+                        notifyPathExfiltrationBlocked(object, "writeMessagesWithMedia", mediaSourceMessageIds ?? [], unknownMediaPaths)
+                        break
+                    }
+
                     // Look up mediaType from original chats and collect message IDs
                     const items = rawItems.map(item => {
                         const chat = object.forwardItem.chats.find(c => c.mediaPath === item.mediaPath)
@@ -418,7 +519,15 @@ CRITICAL RULES:
     
                 case "sendMedia":
                     const mediaPaths = args.mediaPaths as string[]
-                    
+
+                    // Path exfiltration guardrail: never trust media paths coming from the LLM
+                    const unknownSendMediaPaths = getUnknownMediaPaths(object, mediaPaths)
+
+                    if (unknownSendMediaPaths.length > 0) {
+                        notifyPathExfiltrationBlocked(object, "sendMedia", [], unknownSendMediaPaths)
+                        break
+                    }
+
                     // Look up mediaType from original chats and collect message IDs
                     const mediaItems = mediaPaths.map(mediaPath => {
                         const chat = object.forwardItem.chats.find(c => c.mediaPath === mediaPath)
@@ -454,7 +563,13 @@ CRITICAL RULES:
     
                 case "markMessagesAsSent":
                     const ids = args.messageIds as number[]
-    
+
+                    // Path exfiltration guardrail: never trust message IDs coming from the LLM
+                    if (isPathExfiltration(object, ids)) {
+                        notifyPathExfiltrationBlocked(object, "markMessagesAsSent", ids)
+                        break
+                    }
+
                     await prismaStorage.markAsSent(ids)
                     console.log(`[AnalyseAndDecide] Manually marking ${ids.length} message(s) as sent`)
                     break
