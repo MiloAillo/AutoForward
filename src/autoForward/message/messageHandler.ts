@@ -19,7 +19,7 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
 
         // identifier properties
         const isGroup = isJidGroup(key.remoteJid ?? "")
-        const pn = jidDecode(key.participantAlt ?? key.remoteJidAlt)?.user
+        const pn = jidDecode(key.participant ?? key.participantAlt ?? key.remoteJid ?? key.remoteJidAlt)?.user // need testing if this actually hold the real data with this sequence
         const isDirect = isCommand(msg.message?.conversation ?? "")
         const converstation = msg.message?.conversation?.trim()
         const contentType = getContentType(msg.message ?? undefined)
