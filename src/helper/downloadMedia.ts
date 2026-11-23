@@ -3,6 +3,7 @@ import { createWriteStream } from "fs";
 import { readFile, unlink } from "fs/promises";
 import { v4 as UUID } from "uuid";
 import sharp from "sharp";
+import path from "path"
 
 type MediaResult = {
     filename: string
@@ -78,7 +79,7 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
             
             if (originalFilename) {
                 // Sanitize filename (remove dangerous characters but keep spaces)
-                finalFilename = originalFilename.replace(/[<>:"|?*]/g, '_')
+                finalFilename = (path.basename(originalFilename).replace(/[^a-zA-Z0-9 ._-]/g, '_').replace(/^\.+/, '').replace(/\.{2,}/g, '.').trim() || `unnamed_file.${defaultExt}`)
             } else {
                 finalFilename = `document_${UUID()}.${defaultExt}`
             }
