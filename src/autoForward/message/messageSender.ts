@@ -1,6 +1,7 @@
 import type { WAMessage } from "@whiskeysockets/baileys";
 import { readFileSync } from "fs";
 import { socket } from "../../../index.ts";
+import path from "path";
 
 const RATE_LIMIT_MS = 1000;
 
@@ -178,7 +179,7 @@ export async function sendMediaWithCaption(
         const { mediaPath, mediaType, caption } = item;
         
         try {
-            const filePath = `./storage/media/${mediaPath}`;
+            const filePath = `./storage/media/${path.basename(mediaPath)}`;
             const mediaBuffer = readFileSync(filePath);
             
             let content: any;
