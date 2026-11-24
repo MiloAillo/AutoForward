@@ -19,18 +19,19 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
 
         // identifier properties
         const isGroup = isJidGroup(key.remoteJid ?? "")
-        const pn = jidDecode(key.participant ?? key.participantAlt ?? key.remoteJid ?? key.remoteJidAlt)?.user // need testing if this actually hold the real data with this sequence
         const isDirect = isCommand(msg.message?.conversation ?? "")
         const converstation = msg.message?.conversation?.trim()
         const contentType = getContentType(msg.message ?? undefined)
-
-        if (!pn) continue
-
+        
         // AutoForward
         // direct command from admin
-        if (pn === process.env.ADMIN_NUMBER && !isGroup && converstation) {
-            if (isDirect) 
-                directCommand(msg, converstation)
+        if (!isGroup && converstation && isDirect) {
+            const rawJid = [key.remoteJidAlt, key.remoteJid].find(jid => jid?.endsWith("@s.whatsapp.net")) ?? ""
+            const senderPn = jidDecode(rawJid)?.user
+
+            if (senderPn === process.env.ADMIN_NUMBER) {
+                await directCommand(msg, converstation)
+            }
         }
 
         // listening group
@@ -41,8 +42,6 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
                 if (forwards.length > 0) {
                     let mediaPath: string | undefined = undefined
                     let mediaBase64: string | undefined = undefined
-
-                    console.log("TEST:", contentType)
 
                     // Handle media messages (images, videos, and documents)
                     if (contentType === "imageMessage" || contentType === "videoMessage" || contentType === "documentMessage" || contentType === "documentWithCaptionMessage") {
