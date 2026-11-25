@@ -468,4 +468,14 @@ export class PrismaStorage {
             throw error
         }
     }
+
+    async checkHealth(): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
+        const start = Date.now()
+        try {
+            await this.prisma.$queryRaw`SELECT 1`
+            return { ok: true, latencyMs: Date.now() - start }
+        } catch (error: any) {
+            return { ok: false, error: error?.message ?? "Database unreachable" }
+        }
+    }
 }

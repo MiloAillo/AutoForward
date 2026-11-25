@@ -18,6 +18,9 @@ export class WASocket extends EventEmitter {
     private isInitialized = false
     private initPromise: Promise<void>
 
+    private status: "dead" | "connecting" | "open" | "qr" = "connecting"
+    private qrString: string | null = null
+
     constructor() {
         super()
 
@@ -27,6 +30,7 @@ export class WASocket extends EventEmitter {
         this.groupCache = new NodeCache({ stdTTL: groupCacheTTL, useClones: false })
         this.logger = P({ level: "silent" })
         this.initPromise = this.init().catch(err => {
+            this.status = "dead"
             console.error(`[ ${this.id} WASocket] Initialization failed:`, err)
             process.exit(1)
         })
@@ -50,6 +54,7 @@ export class WASocket extends EventEmitter {
     }
 
     async init() {
+        this.status = "connecting"
         if (this.socket) {
             this.socket.ev.removeAllListeners('connection.update')
             this.socket.ev.removeAllListeners('creds.update')
@@ -100,10 +105,18 @@ export class WASocket extends EventEmitter {
 
         this.socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
             if (qr) {
+                this.status = "qr"
+                this.qrString = qr
                 qrcode.generate(qr, { small: true })
             }
 
+            if (connection === 'connecting') {
+                this.status = "connecting"
+            }
+
             if (connection === 'open') {
+                this.status = "open"
+                this.qrString = null
                 console.log(`[${this.id} WASocket] WhatsApp Connection Ready`)
 
                 // custom emit for recconection handling in external event service
@@ -111,16 +124,20 @@ export class WASocket extends EventEmitter {
             }
 
             if (connection === "close") {
+                this.qrString = null
                 const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
                 if (shouldReconnect) {
+                    this.status = "connecting"
                     console.log(`[${this.id} WASocket] Reconnecting... (status: ${statusCode})`)
                     this.init().catch(err => {
+                        this.status = "dead"
                         console.error(`[${this.id} WASocket] Reconnection failed:`, err)
                         process.exit(1)
                     })
                 } else {
+                    this.status = "dead"
                     console.log(`[WASocket ${this.id}] Logged out. Delete auth folder and restart.`)
                     process.exit(0)
                 }
@@ -137,7 +154,17 @@ export class WASocket extends EventEmitter {
         return this.socket
     }
 
+    public getStatus(): "dead" | "connecting" | "open" | "qr" {
+        return this.status
+    }
+
+    public getQR(): string | null {
+        return this.qrString
+    }
+
     public async destroy() {
+        this.status = "dead"
+        this.qrString = null
         if (this.socket) {
             this.socket.ev.removeAllListeners('connection.update')
             this.socket.ev.removeAllListeners('creds.update')

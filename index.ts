@@ -10,6 +10,7 @@ import { downloadMedia } from "./src/helper/downloadMedia.ts";
 import { messageHandler } from "./src/autoForward/message/messageHandler.ts";
 import { msgCronBatchForward } from "./src/autoForward/cron/msgCronBatchForward.ts";
 import { msgCronCleanup } from "./src/autoForward/cron/msgCronCleanup.ts";
+import { startInternalAPI } from "./src/autoForward/api/api.js";
 
 // env load
 try {
@@ -22,6 +23,7 @@ try {
 if (!process.env.ADMIN_NUMBER) throw Error("ADMIN_NUMBER needed inside .env")
 if (!process.env.OPENAI_API_KEY) throw Error("OPENAI_API_KEY needed inside .env")
 if (!process.env.OPENAI_BASE_URL) throw Error("OPENAI_BASE_URL needed inside .env")
+if (!process.env.INTERNAL_HTTP_PORT) throw Error("INTERNAL_HTTP_PORT needed inside .env")
 
 // Ensure media directory exists
 await mkdir('./storage/media', { recursive: true })
@@ -29,14 +31,19 @@ console.log("[index] Media directory ensured")
 
 // init
 export const socket = new WASocket()
-await socket.waitForConnection()
-console.log("[index] WASocket initialized")
 
 export const cacheStorage = new CacheStorage()
 console.log("[index] CacheStorage initialized")
 
 export const prismaStorage = new PrismaStorage()
 console.log("[index] PrismaStorage initialized")
+
+// start AutoForward Internal API for web UI
+startInternalAPI(socket, prismaStorage)
+
+// The rest wait until WASocket properly started
+await socket.waitForConnection()
+console.log("[index] WASocket initialized")
 
 export const modelProvider = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
