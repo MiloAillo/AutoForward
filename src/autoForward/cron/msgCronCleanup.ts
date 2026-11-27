@@ -23,5 +23,7 @@ export function msgCronCleanup() {
         } catch (error) {
             log.error(verboseLogID, `Weekly cleanup failed: ${error}`)
         }
+    }, {
+        missedExecutionTolerance: 60 * 60 * 1000
     })
 }

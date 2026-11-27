@@ -14,12 +14,18 @@ type messageHandlerType = {
 }
 
 export async function messageHandler({ messages, type }: messageHandlerType) {
+    log.debug(verboseLogID, `messages.upsert fired: type=${type}, count=${messages.length}`)
+
     if (type !== "notify") return
 
     for (const msg of messages) {
-        if (msg.key.fromMe) continue
+        log.debug(verboseLogID, `Message key: fromMe=${msg.key.fromMe}, remoteJid=${msg.key.remoteJid}, id=${msg.key.id}`)
+        log.debug(verboseLogID, `Message content types: ${Object.keys(msg.message || {})}`)
 
-        log.debug(verboseLogID, "Message received")
+        if (msg.key.fromMe) {
+            log.debug(verboseLogID, "Skipped: msg.key.fromMe is true")
+            continue
+        }
 
         const key = msg.key
 

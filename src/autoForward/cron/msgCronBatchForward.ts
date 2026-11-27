@@ -116,5 +116,7 @@ export async function msgCronBatchForward() {
                 `Affected messages remain unsent in queue and will be retried next batch.`
             ].join("\n"))
         }
+    }, {
+        missedExecutionTolerance: 60 * 1000
     })
 }

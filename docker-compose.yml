@@ -42,6 +42,8 @@ services:
       - "${INTERNAL_HTTP_PORT:-3001}:${INTERNAL_HTTP_PORT:-3001}"
     networks:
       - autoforward-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Sidecar that owns the Docker lifecycle. It stays up when the bot does not,
   # so the dashboard can always start / stop / restart the bot container.
