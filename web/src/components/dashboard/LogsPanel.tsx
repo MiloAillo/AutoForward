@@ -5,7 +5,7 @@ import { useToast } from "../ui/Toast"
 import { cn, formatClock, parseLogLine } from "../../lib/format"
 import type { LogPayload, ParsedLog } from "../../types"
 
-type LevelFilter = "ALL" | "INFO" | "WARN" | "ERROR"
+type LevelFilter = "ALL" | "INFO" | "WARN" | "ERROR" | "DEBUG"
 
 const LEVEL_STYLES: Record<ParsedLog["level"], string> = {
     INFO: "text-ok",
@@ -15,7 +15,7 @@ const LEVEL_STYLES: Record<ParsedLog["level"], string> = {
     LOG: "text-muted"
 }
 
-const FILTERS: LevelFilter[] = ["ALL", "INFO", "WARN", "ERROR"]
+const FILTERS: LevelFilter[] = ["ALL", "INFO", "WARN", "ERROR", "DEBUG"]
 
 export function LogsPanel({
     logs,
@@ -167,7 +167,7 @@ export function LogsPanel({
                     visible.map((line, index) => (
                         <div
                             key={`${index}-${line.message.slice(0, 24)}`}
-                            className="grid grid-cols-[64px_44px_1fr] items-start gap-2 px-4 hover:bg-white/[0.025]"
+                            className="grid grid-cols-[64px_48px_1fr] items-start gap-2 px-4 hover:bg-white/[0.025]"
                         >
                             <span className="text-[10.5px] text-faint/80">{formatClock(line.time) || "—"}</span>
                             <span className={cn("text-[10px] font-semibold uppercase", LEVEL_STYLES[line.level])}>

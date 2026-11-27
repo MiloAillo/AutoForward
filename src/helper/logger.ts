@@ -19,7 +19,7 @@ export const logger = {
     warn: (tag: string, message: string, ...rest: unknown[]) => write("WARN", tag, message, ...rest),
     error: (tag: string, message: string, ...rest: unknown[]) => write("ERROR", tag, message, ...rest),
     debug: (tag: string, message: string, ...rest: unknown[]) => {
-        if (process.env.DEBUG === "true" || process.env.NODE_ENV !== "production") {
+        if (process.env.DEBUG === "true") {
             write("DEBUG", tag, message, ...rest)
         }
     }

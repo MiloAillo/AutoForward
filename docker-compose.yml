@@ -32,6 +32,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=mysql://${DATABASE_USER}:${DATABASE_PASSWORD}@mysql:3306/${DATABASE_NAME}
+      - DEBUG=${DEBUG:-false}
     depends_on:
       mysql:
         condition: service_healthy
