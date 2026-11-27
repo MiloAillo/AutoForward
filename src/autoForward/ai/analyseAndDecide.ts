@@ -4,6 +4,10 @@ import { modelProvider, prismaStorage } from "../../../index.ts";
 import { forwardMessages, sendMediaWithCaption, writeMessages } from "../message/messageSender.ts";
 import type { WAMessage } from "@whiskeysockets/baileys";
 import { notifyAdmin } from "../../helper/notifyAdmin.ts";
+import { log } from "../../helper/logger.ts";
+
+const logID = "Decider Model"
+const verboseLogID = "ai/analyseAndDecide.ts"
 
 type ForwardContext = Awaited<ReturnType<typeof aiReadyFormatter>>
 
@@ -41,7 +45,7 @@ function isPathExfiltration(truthObject: ForwardContext, LLMMessageIds: number[]
  * Notifies the admin that an LLM tool call was blocked because it referenced
  * message IDs (or media paths) that are outside the current forward item.
  */
-function notifyPathExfiltrationBlocked(
+async function notifyPathExfiltrationBlocked(
     truthObject: ForwardContext,
     toolName: string,
     referencedMessageIds: number[],
@@ -55,32 +59,33 @@ function notifyPathExfiltrationBlocked(
     if (unknownMediaPaths.length > 0) reasons.push("media paths outside the permitted set")
 
     const lines = [
-        "*LLM Path Exfiltration Blocked*",
-        "",
-        `Action: ${toolName}`,
-        `Forward: ${truthObject.forwardItem.fromGroup} -> ${truthObject.forwardItem.sendToGroup}`,
-        "",
-        `The LLM's ${toolName} request was blocked because it referenced ${reasons.join(" and ")}.`,
-        "",
-        `Source group: ${truthObject.forwardItem.fromGroup}`,
-        `Permitted message IDs: ${permittedIds.join(", ")}`,
-        `Message IDs referenced by the LLM: ${referencedMessageIds.join(", ") || "none"}`
+        `*[AutoForward] Security Alert: LLM Path Exfiltration Blocked*`,
+        ``,
+        `Forward Route: *${truthObject.forwardItem.fromGroup || truthObject.forwardItem.fromGroupId}* ➔ *${truthObject.forwardItem.sendToGroup || truthObject.forwardItem.sendToGroupId}*`,
+        `Blocked Action: \`${toolName}\``,
+        ``,
+        `The LLM's \`${toolName}\` call was blocked because it referenced ${reasons.join(" and ")}.`,
+        ``,
+        `*Diagnostic Details:*`,
+        `• Permitted message IDs: ${permittedIds.join(", ") || "none"}`,
+        `• LLM referenced IDs: ${referencedMessageIds.join(", ") || "none"}`
     ]
 
     if (outOfBoundsIds.length > 0) {
-        lines.push(`Out-of-bounds message IDs: ${outOfBoundsIds.join(", ")}`)
+        lines.push(`• Out-of-bounds message IDs: ${outOfBoundsIds.join(", ")}`)
     }
 
     if (unknownMediaPaths.length > 0) {
-        lines.push(`Unknown media paths: ${unknownMediaPaths.join(", ")}`)
+        lines.push(`• Unknown media paths: ${unknownMediaPaths.join(", ")}`)
     }
 
     lines.push(
-        "",
-        "If this keeps happening, review this forward item's rules for any chat that contains referencing instructions. This guardrail has prevented random messages from being forwarded."
+        ``,
+        `*Recommendation:*`,
+        `Review active rules on this route for chat text containing referencing instructions. The guardrail has prevent unauthorized messages from being forwarded.`
     )
 
-    notifyAdmin(lines.join("\n"))
+    await notifyAdmin(lines.join("\n"))
 }
 
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -217,11 +222,13 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 ] 
 
 export async function analyzeAndDecide(object: Awaited<ReturnType<typeof aiReadyFormatter>>) {
-    console.log(`[analyseAndDecide] Fetching model response`)
+    log.debug(verboseLogID, "Fetching model decision")
 
     try {
+        log.debug(verboseLogID, `modelProvider called with model: ${process.env.AI_MODEL_NAME}`)
+
         const response = await modelProvider.chat.completions.create({
-            model: process.env.AI_MODEL_NAME || "ultimate",
+            model: process.env.AI_MODEL_NAME!,
             tools: tools,
             tool_choice: "required",
             messages: [
@@ -406,18 +413,41 @@ CRITICAL RULES:
         const toolCalls = response.choices[0]?.message?.tool_calls
 
         if (!toolCalls || toolCalls.length === 0) {
-            console.log("[analyseAndDecide] Critical Model Failure. No tool call returned.")
-            console.log("[analyseAndDecide] Marking all messages as sent to prevent infinite loop.")
-            
-            const allMessageIds = object.forwardItem.chats.map(chat => chat.id)
-            await prismaStorage.markAsSent(allMessageIds)
-            
+            log.error(logID, "Critical Model Failure, no tool call returned")
+            await notifyAdmin([
+                `*[AutoForward] Model Failure: No Tool Calls Returned*`,
+                ``,
+                `Forward Route: *${object.forwardItem.fromGroup || object.forwardItem.fromGroupId}* ➔ *${object.forwardItem.sendToGroup || object.forwardItem.sendToGroupId}* (ID #${object.forwardItemId})`,
+                `Messages in batch: ${object.forwardItem.chats.length}`,
+                `Model: \`${process.env.AI_MODEL_NAME || "unknown"}\``,
+                ``,
+                `The model completed without triggering any tool calls. Unsent messages remain in queue and will be retried next batch.`,
+                ``,
+                `*Recommendations:*`,
+                `1. Check active rules on this route for contradictory instructions.`,
+                `2. Change the model with stronger tool/function-calling capability.`
+            ].join("\n"))
+
             return
         }
     
         for (const toolCall of toolCalls) {
             if (toolCall.type !== "function") {
-                console.log("[analyseAndDecide] Critical Model Failure. toolCall is not a function.")
+                log.error(logID, "Critical Model Failure: toolCall is not a function")
+                await notifyAdmin([
+                    `*[AutoForward] Model Failure: toolCall is not a function*`,
+                    ``,
+                    `Forward Route: *${object.forwardItem.fromGroup || object.forwardItem.fromGroupId}* ➔ *${object.forwardItem.sendToGroup || object.forwardItem.sendToGroupId}* (ID #${object.forwardItemId})`,
+                    `Messages in batch: ${object.forwardItem.chats.length}`,
+                    `Model: \`${process.env.AI_MODEL_NAME || "unknown"}\``,
+                    ``,
+                    `Model return a toolCall, but it is not a type of function. Ignored.`,
+                    ``,
+                    `*Recommendations:*`,
+                    `1. Check active rules on this route for contradictory instructions.`,
+                    `2. Change the model with stronger tool/function-calling capability.`
+                ].join("\n"))
+                
                 continue
             }
     
@@ -430,19 +460,19 @@ CRITICAL RULES:
 
                     // Path exfiltration guardrail: never trust message IDs coming from the LLM
                     if (isPathExfiltration(object, messageIds)) {
-                        notifyPathExfiltrationBlocked(object, "forwardMessages", messageIds)
+                        await notifyPathExfiltrationBlocked(object, "forwardMessages", messageIds)
                         break
                     }
 
                     const chats = await prismaStorage.getChatsByIds(messageIds)
                     const msgs = chats.map(chat => chat.msg as unknown as WAMessage)
 
-                    console.log(`[AnalyseAndDecide] Forwarding ${msgs.length} message(s)`)
+                    log.info(logID, `Forwarding ${msgs.length} message(s)`)
+
                     await forwardMessages(msgs, object.forwardItem.sendToGroupId)
                     
                     // Automatically mark forwarded messages as sent
                     await prismaStorage.markAsSent(messageIds)
-                    console.log(`[AnalyseAndDecide] Auto-marked ${messageIds.length} forwarded message(s) as sent`)
                     break
             
                 case "writeMessages":
@@ -451,18 +481,17 @@ CRITICAL RULES:
 
                     // Path exfiltration guardrail: never trust message IDs coming from the LLM
                     if (isPathExfiltration(object, sourceMessageIds ?? [])) {
-                        notifyPathExfiltrationBlocked(object, "writeMessages", sourceMessageIds ?? [])
+                        await notifyPathExfiltrationBlocked(object, "writeMessages", sourceMessageIds ?? [])
                         break
                     }
 
-                    console.log(`[AnalyseAndDecide] Sending ${texts.length} text(s)`)
+                    log.info(logID, `Sending ${texts.length} text(s)`)
+
                     await writeMessages(texts, object.forwardItem.sendToGroupId)
                     
                     // Automatically mark source messages as sent
-                    if (sourceMessageIds && sourceMessageIds.length > 0) {
-                        await prismaStorage.markAsSent(sourceMessageIds)
-                        console.log(`[AnalyseAndDecide] Auto-marked ${sourceMessageIds.length} source message(s) as sent`)
-                    }
+                    if (sourceMessageIds && sourceMessageIds.length > 0) await prismaStorage.markAsSent(sourceMessageIds)
+
                     break
     
                 case "writeMessagesWithMedia":
@@ -474,7 +503,7 @@ CRITICAL RULES:
                     const unknownMediaPaths = getUnknownMediaPaths(object, referencedMediaPaths)
 
                     if (isPathExfiltration(object, mediaSourceMessageIds ?? []) || unknownMediaPaths.length > 0) {
-                        notifyPathExfiltrationBlocked(object, "writeMessagesWithMedia", mediaSourceMessageIds ?? [], unknownMediaPaths)
+                        await notifyPathExfiltrationBlocked(object, "writeMessagesWithMedia", mediaSourceMessageIds ?? [], unknownMediaPaths)
                         break
                     }
 
@@ -501,20 +530,16 @@ CRITICAL RULES:
                         .map(item => object.forwardItem.chats.find(c => c.mediaPath === item.mediaPath)?.id)
                         .filter((id): id is number => id !== undefined)
     
-                    console.log(`[AnalyseAndDecide] Sending ${items.length} media with caption(s)`)
+                    log.info(logID, `Sending ${items.length} media with caption(s)`)
+
                     await sendMediaWithCaption(items, object.forwardItem.sendToGroupId)
                     
                     // Automatically mark media messages as sent
-                    if (mediaMessageIds.length > 0) {
-                        await prismaStorage.markAsSent(mediaMessageIds)
-                        console.log(`[AnalyseAndDecide] Auto-marked ${mediaMessageIds.length} media message(s) as sent`)
-                    }
+                    if (mediaMessageIds.length > 0) await prismaStorage.markAsSent(mediaMessageIds)
                     
                     // Automatically mark source text messages as sent
-                    if (mediaSourceMessageIds && mediaSourceMessageIds.length > 0) {
-                        await prismaStorage.markAsSent(mediaSourceMessageIds)
-                        console.log(`[AnalyseAndDecide] Auto-marked ${mediaSourceMessageIds.length} source message(s) as sent`)
-                    }
+                    if (mediaSourceMessageIds && mediaSourceMessageIds.length > 0) await prismaStorage.markAsSent(mediaSourceMessageIds)
+
                     break
     
                 case "sendMedia":
@@ -524,7 +549,7 @@ CRITICAL RULES:
                     const unknownSendMediaPaths = getUnknownMediaPaths(object, mediaPaths)
 
                     if (unknownSendMediaPaths.length > 0) {
-                        notifyPathExfiltrationBlocked(object, "sendMedia", [], unknownSendMediaPaths)
+                        await notifyPathExfiltrationBlocked(object, "sendMedia", [], unknownSendMediaPaths)
                         break
                     }
 
@@ -551,14 +576,13 @@ CRITICAL RULES:
                         .map(mediaPath => object.forwardItem.chats.find(c => c.mediaPath === mediaPath)?.id)
                         .filter((id): id is number => id !== undefined)
                     
-                    console.log(`[AnalyseAndDecide] Sending ${mediaItems.length} media without caption`)
+                    log.info(logID, `Sending ${mediaItems.length} media without caption`)
+
                     await sendMediaWithCaption(mediaItems, object.forwardItem.sendToGroupId)
                     
                     // Automatically mark media messages as sent
-                    if (sendMediaMessageIds.length > 0) {
-                        await prismaStorage.markAsSent(sendMediaMessageIds)
-                        console.log(`[AnalyseAndDecide] Auto-marked ${sendMediaMessageIds.length} media message(s) as sent`)
-                    }
+                    if (sendMediaMessageIds.length > 0) await prismaStorage.markAsSent(sendMediaMessageIds)
+                    
                     break
     
                 case "markMessagesAsSent":
@@ -566,26 +590,54 @@ CRITICAL RULES:
 
                     // Path exfiltration guardrail: never trust message IDs coming from the LLM
                     if (isPathExfiltration(object, ids)) {
-                        notifyPathExfiltrationBlocked(object, "markMessagesAsSent", ids)
+                        await notifyPathExfiltrationBlocked(object, "markMessagesAsSent", ids)
                         break
                     }
 
                     await prismaStorage.markAsSent(ids)
-                    console.log(`[AnalyseAndDecide] Manually marking ${ids.length} message(s) as sent`)
+
                     break
     
                 case "skipMessages":
                     const reason = args.reason as string
     
-                    console.log(`[analyseAndDecide] ${object.forwardItem.chats.length} message(s) skipped. Reason: ${reason}`)
+                    log.info(logID, `${object.forwardItem.chats.length} message(s) skipped. Reason: ${reason}`)
                     break
 
                 default:
-                    console.log(`[analyseAndDecide] Critical Model Failure. toolCall is an unknown value`)
+                    log.error(logID, `Critical Model Failure. toolCall is an unknown value`)
+                    await notifyAdmin([
+                        `*[AutoForward] Critical Model Failure. toolCall is an unknown value*`,
+                        ``,
+                        `Forward Route: *${object.forwardItem.fromGroup || object.forwardItem.fromGroupId}* ➔ *${object.forwardItem.sendToGroup || object.forwardItem.sendToGroupId}* (ID #${object.forwardItemId})`,
+                        `Messages in batch: ${object.forwardItem.chats.length}`,
+                        `Model: \`${process.env.AI_MODEL_NAME || "unknown"}\``,
+                        ``,
+                        `Model return an unknown toolCall name.`,
+                        ``,
+                        `*Recommendations:*`,
+                        `1. Check active rules on this route for contradictory instructions.`,
+                        `2. Change the model with stronger tool/function-calling capability.`
+                    ].join("\n"))
+
                     break
                 }
         }
     } catch (error) {
-        console.log(`[analyseAndDecide] Critical Error. Failed to fetch model response. Error:`, error)
+        log.error(logID, `Critical Error. Failed to fetch model response. Error: ${error}`)
+
+        await notifyAdmin([
+            `*[AutoForward] Failed to fetch model response*`,
+            ``,
+            `Forward Route: *${object.forwardItem.fromGroup || object.forwardItem.fromGroupId}* ➔ *${object.forwardItem.sendToGroup || object.forwardItem.sendToGroupId}* (ID #${object.forwardItemId})`,
+            `Messages in batch: ${object.forwardItem.chats.length}`,
+            `Model: \`${process.env.AI_MODEL_NAME || "unknown"}\``,
+            ``,
+            `Model is needed to decide, but system failed to fetch it.`,
+            ``,
+            `*Recommendations:*`,
+            `1. Check OpenAI compatible url and API key you provided in .env.`,
+            `2. Check logs for the exact error cause.`
+        ].join("\n"))
     }
 }

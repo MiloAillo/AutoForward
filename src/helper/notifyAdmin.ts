@@ -1,4 +1,8 @@
 import { socket } from "../../index.ts";
+import { log } from "./logger.ts";
+
+const logID = "Admin Notifier"
+const verboseLogID = "helper/notifyAdmin.ts"
 
 /**
  * Sends a notification message to the admin using ADMIN_NUMBER .env variable.
@@ -7,7 +11,7 @@ export async function notifyAdmin(text: string): Promise<boolean> {
     const adminNumber = process.env.ADMIN_NUMBER
 
     if (!adminNumber) {
-        console.error(`[notifyAdmin] ADMIN_NUMBER is not set. Notification not sent. Text: ${text}`)
+        log.error(verboseLogID, `ADMIN_NUMBER is not set. Notification not sent. Text: ${text}`)
         return false
     }
 
@@ -16,10 +20,10 @@ export async function notifyAdmin(text: string): Promise<boolean> {
         const jid = `${adminNumber}@s.whatsapp.net`
 
         await sock.sendMessage(jid, { text })
-        console.log(`[notifyAdmin] Notification sent to admin: ${text}`)
+        log.info(logID, `Notification sent to admin: ${text}`)
         return true
     } catch (error) {
-        console.error(`[notifyAdmin] Failed to notify admin. Text: ${text}`, error)
+        log.error(verboseLogID, `Failed to notify admin. Text: ${text}`, error)
         return false
     }
 }

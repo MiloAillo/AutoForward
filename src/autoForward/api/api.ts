@@ -9,6 +9,10 @@ import {
     ForwardRuleParamSchema,
     IdParamSchema
 } from "../../schema.ts"
+import { log } from "../../helper/logger.ts"
+
+const logID = "Internal API"
+// const verboseLogID = "api/api.ts"
 
 const app = express()
 
@@ -38,7 +42,8 @@ export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage,
     const port = Number(process.env.INTERNAL_HTTP_PORT) || 3001
 
     app.listen(port, "0.0.0.0", () => {
-        console.log(`[api] AutoForward Internal API online on port ${port}`)
+        log.info(logID, `AutoForward Internal API online on port ${port}`)
+        
     })
 
     // Health
@@ -76,7 +81,7 @@ export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage,
                 prismaStorage.getForwards(),
                 prismaStorage.getRules(),
                 cacheStorage.getGroups().catch((e) => {
-                    console.warn(`[api] Failed to fetch groups: ${e?.message}`)
+                    log.warn(logID, `Failed to fetch groups: ${e?.message}`)
                     return {}
                 })
             ])

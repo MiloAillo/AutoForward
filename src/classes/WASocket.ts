@@ -6,6 +6,10 @@ import P from 'pino'
 import qrcode from 'qrcode-terminal'
 import { v4 as uuid } from 'uuid'
 import { EventEmitter } from "events";
+import { log } from "../helper/logger.ts";
+
+const logID = "WA Socket"
+const verboseLogID = "classes/WASocket.ts"
 
 export class WASocket extends EventEmitter {
     private socket!: BaileysSocket
@@ -31,7 +35,7 @@ export class WASocket extends EventEmitter {
         this.logger = P({ level: "silent" })
         this.initPromise = this.init().catch(err => {
             this.status = "dead"
-            console.error(`[ ${this.id} WASocket] Initialization failed:`, err)
+            log.error(verboseLogID, "Initialization failed:", err)
             process.exit(1)
         })
     }
@@ -117,7 +121,7 @@ export class WASocket extends EventEmitter {
             if (connection === 'open') {
                 this.status = "open"
                 this.qrString = null
-                console.log(`[${this.id} WASocket] WhatsApp Connection Ready`)
+                log.info(logID, "WhatsApp Connection Ready")
 
                 // custom emit for recconection handling in external event service
                 this.emit("socket-ready")
@@ -130,15 +134,16 @@ export class WASocket extends EventEmitter {
 
                 if (shouldReconnect) {
                     this.status = "connecting"
-                    console.log(`[${this.id} WASocket] Reconnecting... (status: ${statusCode})`)
+                    log.warn(logID, `Reconnecting... (status: ${statusCode})`)
                     this.init().catch(err => {
                         this.status = "dead"
-                        console.error(`[${this.id} WASocket] Reconnection failed:`, err)
+                        log.error(verboseLogID, "Reconnection failed:", err)
                         process.exit(1)
                     })
                 } else {
                     this.status = "dead"
-                    console.log(`[WASocket ${this.id}] Logged out. Delete auth folder and restart.`)
+                    // intentional logID instead of verbose one. Its dedicated for normal user.
+                    log.error(logID, "Logged out. Delete auth folder and restart.")
                     process.exit(0)
                 }
             }
@@ -173,6 +178,6 @@ export class WASocket extends EventEmitter {
             this.socket.end(undefined)
         }
         this.groupCache.close()
-        console.log(`[${this.id} WASocket] Cleanup complete`)
+        log.debug(verboseLogID, "Cleanup complete")
     }
 }

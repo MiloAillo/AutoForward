@@ -1,6 +1,10 @@
 import NodeCache from "node-cache";
 import { socket } from "../../index.ts";
 import type { GroupMetadata } from "@whiskeysockets/baileys";
+import { log } from "../helper/logger.ts";
+
+const logID = "Cache Storage"
+// const verboseLogID = "classes/CacheStorage.ts"
 
 export class CacheStorage {
     private groups: NodeCache;
@@ -30,7 +34,7 @@ export class CacheStorage {
                 cachedGroups = await sock.groupFetchAllParticipating();
                 this.groups.set('groups', cachedGroups);
             } catch (err: any) {
-                console.warn(`[CacheStorage] Failed to fetch groups: ${err?.message || err}`);
+                log.warn(logID, `Failed to fetch groups: ${err?.message || err}`);
                 return {};
             }
         }
