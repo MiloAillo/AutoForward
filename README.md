@@ -1,389 +1,235 @@
-# AutoForward v2.1 Stable
+# AutoForward v2.2 Beta
 
-Intelligent WhatsApp message routing bot powered by AI that can forward, summarize, or send files between groups based on customizable rules. Built with TypeScript and MySQL, it features sophisticated message analysis, batch processing, and complete media support (AI Vision is currently not supported.).
+WhatsApp AI Bot that watches your chats, runs each message through rules you define, and routes what matters: forwarded, summarized, or skipped, automatically.
 
----
+- **AI-Powered Message Analysis**: OpenAI-compatible models route messages intelligently
+- **Web UI Control**: manage routes, rules, and logs from the browser
+- **Complete Media Support**: forwards images, videos, and documents
+- **Many-to-Many Rule System**: reusable rules across multiple forward routes
+- **Batch Processing**: configurable cron interval
+- **Auto-Cleanup**: automatic message retention with configurable TTL
 
-## Table of Contents
-- [Architecture](#architecture)
-- [Changelog](#changelog)
-- [Limitation](#limitation)
-- [Features](#features)
-- [Installation](#installation)
-  - [Docker Setup (Recommended)](#docker-setup-recommended)
-  - [Local Development Setup](#local-development-setup)
-- [Configuration](#configuration)
-- [Usage](#usage)
-  - [Getting Started](#getting-started)
-  - [Admin Commands](#admin-commands)
-  - [Usage Examples](#usage-examples)
-- [Next Fix & Update](#next-fix--update)
+### How the AI works
 
----
+Each forward route can have rules attached, plain-text instructions that tell the AI what to do. Every batch cycle, the AI reads pending messages against those rules and decides:
 
-## Changelog
-- Reusable rules with many-to-many relationships between listen groups and send groups.
-- Migration from file based storage to Prisma ORM + MySQL database.
-- Image, video, and document support.
-- Replaced forward only mechanism to AI + rules driven to have the ability to summarize, send media, or forward multiple messages.
-- implement cron job batch processing and cleanup with customisable time period
+| Action | What happens |
+|--------|-------------|
+| **Forward** | Send the original message as-is |
+| **Summarize** | Condense multiple messages into one |
+| **Rewrite** | Send something entirely different based on the content |
+| **Skip** | Incomplete context (e.g. unanswered question), hold for next batch |
+| **Drop** | Spam or irrelevant, mark as sent without forwarding |
 
-## Limitation
-AI Vision is not supported in the meantime. Meaning any media message (image, video, documents) will not be processed directly to the AI.
-The model can still see that there is a media message present but is unable to process what is inside.
-The model can still forward or send the media message itself with the help of the file name and the unsent messages around it as additional context. (After two weeks of testing, the model 96.8% (31 out of 32) recognize and forward images and files correctly)
+The AI can handle fragmentation (merging related short messages) and adapts based on volume (prefers summaries when 3+ messages pile up).
+> ---
+> **You control everything through rules.**
+> ---
+> - No rules = plain forward. 
+> - Add a one-liner = light filter. 
+> - Write a detailed rule = full editorial control over what gets sent and how.
+>  ---
+## Major Changes
+- Full app control from Web UI
+- Notify admin on error
+- logging massively improved across the app
 
-## Next Fix & Update
-- Code refactor
-- Cleanup saved files
-- Adding sent chat history for model context
-
----
-
-## Features
-
-- **AI-Powered Message Analysis** - Uses OpenAI-compatible models to intelligently route messages
-- **Many-to-Many Rule System** - Reusable rules can be applied to multiple forward routes
-- **Batch Processing** - Configurable cron job processes messages in batches (default: every 30 minutes)
-- **Complete Media Support** - Forward images, videos, and documents (PDF, DOCX, XLSX, etc.)
-- **Auto-Cleanup** - Automatic message cleanup with configurable retention (default: 7 days)
-- **MySQL Database** - Persistent storage with Prisma ORM
-- **Docker Ready** - Production deployment with Docker Compose
-
+## Patch & Bug Fix
+- added LLM path exfiltration guardrail
+- path traversal issue fixed
 ---
 
 ## Installation
+
+Two ways to run it. Docker brings up everything (database, bot, watchdog, dashboard) in one command.
+
+The stack is four containers:
+
+| Container | Role | Port |
+|-----------|------|------|
+| `autoforward-mysql` | MySQL 8 database | internal |
+| `autoforward-bot` | WhatsApp client + AI + internal API | `3001` |
+| `autoforward-watchdog` | Start/stop/restart the bot, stream logs | `3002` |
+| `autoforward-dashboard` | nginx serving the built web UI | `8080` |
+
+The watchdog and web interface stays up even when the bot is down, this allow the user to turn the bot online effortlessly.
 
 ### Docker Setup (Recommended)
 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd "AutoForward v2.0"
+   cd autoforward
    ```
 
-2. **Create environment file**
+2. **Create the environment file**
    ```bash
    cp .env.example .env
    ```
 
-3. **Configure environment variables**
-   
-   Edit `.env` and set the required values:
+3. **Fill in `.env`.**
    ```bash
-   # Your WhatsApp number (without + or country code)
+   # Your WhatsApp number, digits only (no + or country code)
    ADMIN_NUMBER=628123456789
-   
-   # OpenAI-compatible API configuration
-   OPENAI_API_KEY=your-api-key-here
-   OPENAI_BASE_URL=http://localhost:20128/v1
-   AI_MODEL_NAME=ultimate
-   
-   # Database credentials (change password for production)
-   DATABASE_PASSWORD=your_secure_password
-   ```
 
-4. **Start the containers**
+   # OpenAI-compatible model provider
+   OPENAI_API_KEY=sk-your-key
+   OPENAI_BASE_URL=http://host.docker.internal:20128/v1
+   AI_MODEL_NAME=ambatukam-6.7-max
+
+   # MySQL
+   DATABASE_USER=autoforward
+   DATABASE_PASSWORD=change-me
+   DATABASE_NAME=autoforward
+   DATABASE_URL="mysql://autoforward:change-me@mysql:3306/autoforward"
+   ```
+   > Running the model server on your host (LM Studio, Ollama, 9router, etc.)? Point `OPENAI_BASE_URL` at `host.docker.internal`, not `localhost`, or the container cannot see it.
+
+4. **Build the dashboard.** The nginx container serves `web/dist`, so it has to exist first:
    ```bash
-   docker-compose up -d
+   cd web
+   npm install
+   npm run build
+   cd ..
    ```
 
-5. **View logs and scan QR code**
+5. **Start everything**
+   ```bash
+   docker compose up -d --build
+   ```
+
+6. **Open the dashboard** at [http://localhost:8080](http://localhost:8080) and scan the QR code shown there. It is also printed in the bot logs:
    ```bash
    docker logs autoforward-bot -f
    ```
-   
-   Scan the QR code with WhatsApp to authenticate.
 
-6. **Verify bot is running**
-   
-   Wait for the log message: `WhatsApp Connection Ready`
+   Wait for `WhatsApp Connection Ready`. From the dashboard you can add forwards, write rules, watch logs, and start/stop the bot.
+
+Rebuilt the web UI later? Just run `npm run build` again in `web/` and refresh the browser. The `dist` folder is bind-mounted, so no container restart is needed.
 
 ### Local Development Setup
 
 1. **Prerequisites**
-   - Node.js 22+ with experimental TypeScript support
+   - Node.js 22+
    - MySQL 8.0+
-   - npm or yarn
+   - npm
 
 2. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. **Setup database**
-   
-   Create a MySQL database and update `.env`:
+3. **Point `.env` at your local database**
    ```bash
-   DATABASE_URL="mysql://user:password@localhost:3306/autoforward"
+   DATABASE_HOST=localhost
+   DATABASE_PORT=3306
+   DATABASE_USER=autoforward
+   DATABASE_PASSWORD=your_password
+   DATABASE_NAME=autoforward
+   DATABASE_URL="mysql://autoforward:your_password@localhost:3306/autoforward"
    ```
 
-4. **Run database migrations**
+4. **Apply database migrations**
    ```bash
+   npx prisma generate
    npx prisma migrate deploy
    ```
 
-5. **Start development server**
+5. **Start the bot**
    ```bash
    npm run dev
    ```
+
+6. **Start the dashboard** (separate terminal, hot-reloads at http://localhost:5173)
+   ```bash
+   cd web
+   npm install
+   npm run dev
+   ```
+
+The watchdog is optional in local dev: it drives the Docker containers, so it only matters when the bot runs containerized. To run it anyway:
+```bash
+npx tsx watchdog/index.ts
+```
 
 ---
 
 ## Configuration
 
+All settings live in `.env`. Docker reads it via `env_file`, local dev loads it with `dotenv`.
+
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ADMIN_NUMBER` | Yes | - | Your WhatsApp number (without + or country code, e.g., 628123456789) |
-| `OPENAI_API_KEY` | Yes | - | API key for OpenAI-compatible service |
-| `OPENAI_BASE_URL` | Yes | - | Base URL for the model provider API |
-| `AI_MODEL_NAME` | No | `ultimate` | AI model name to use |
-| `DATABASE_URL` | Yes | - | MySQL connection string |
-| `BATCH_FORWARD_INTERVAL_MINUTES` | No | `30` | How often to process unsent messages (in minutes) |
-| `CLEANUP_RETENTION_DAYS` | No | `7` | How long to keep messages before deletion (minimum 1 day) |
-| `STORAGE_DIR` | No | `./storage` | Directory for file storage |
-| `AUTH_STATE_DIR` | No | `auth` | Directory for WhatsApp authentication state |
-| `CACHE_TTL_SECONDS` | No | `300` | Cache TTL for group metadata |
+**Core**
 
-### Docker vs Local Configuration
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ADMIN_NUMBER` | Yes | Your WhatsApp number, digits only. Used for error alerts and bot identification |
+| `OPENAI_API_KEY` | Yes | API key for the OpenAI-compatible service |
+| `OPENAI_BASE_URL` | Yes | Base URL of the model provider (`.../v1`) |
+| `AI_MODEL_NAME` | Yes | Model used to classify and rewrite messages |
 
-**Docker**: Database host is `mysql` (service name in docker-compose)
+**Database**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_USER` | Yes | MySQL user |
+| `DATABASE_PASSWORD` | Yes | MySQL password |
+| `DATABASE_NAME` | Yes | MySQL database name |
+| `DATABASE_HOST` | Yes | Database host: `mysql` in Docker, `localhost` for local dev |
+| `DATABASE_PORT` | No | Database port |
+| `DATABASE_URL` | Yes | Full connection string, used by Prisma migrations |
+
+**Batch and storage**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BATCH_FORWARD_INTERVAL_MINUTES` | No | How often pending messages are processed (1-59) |
+| `CLEANUP_RETENTION_DAYS` | No | Days before sent messages and media are deleted (min 1) |
+| `STORAGE_DIR` | No | Where downloaded media is written |
+| `AUTH_STATE_DIR` | No | Where WhatsApp session credentials are stored |
+| `CACHE_TTL_SECONDS` | No | TTL for cached group metadata |
+| `GROUP_CACHE_TTL_SECONDS` | No | TTL for the Baileys socket group cache |
+
+**Services**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `INTERNAL_HTTP_PORT` | No | Bot internal API the dashboard calls |
+| `WATCHDOG_HTTP_PORT` | No | Watchdog API (lifecycle + logs) |
+| `DASHBOARD_PORT` | No | Host port for the dashboard container |
+| `BOT_CONTAINER_NAME` | No | Container the watchdog supervises |
+| `DEBUG` | No | `true` enables verbose debug logs in console and dashboard |
+
+Defaults for optional variables are documented in `.env.example`.
+
+> `INTERNAL_HTTP_PORT` and `VITE_BOT_URL` must point at the same port, and so must `WATCHDOG_HTTP_PORT` and `VITE_WATCHDOG_URL`. A mismatch does not crash anything, but the dashboard shows the bot as offline because the browser is calling a port nothing listens on. Compose also publishes `${PORT}:${PORT}`, so the two port variables must also differ from each other.
+
+### Docker vs Local Database Host
+
+The only value that changes between the two is the database host:
+
+**Docker** uses the compose service name `mysql`:
 ```bash
+DATABASE_HOST=mysql
 DATABASE_URL="mysql://autoforward:password@mysql:3306/autoforward"
 ```
 
-**Local**: Database host is `localhost` or your MySQL server IP
+**Local** uses `localhost` (or your MySQL server IP):
 ```bash
+DATABASE_HOST=localhost
 DATABASE_URL="mysql://autoforward:password@localhost:3306/autoforward"
 ```
 
 ---
 
-## Usage
-
-### Getting Started
-
-1. **Authenticate with WhatsApp**
-   
-   On first run, scan the QR code displayed in the logs with your WhatsApp.
-
-2. **Wait for connection**
-   
-   Wait until you see `[WASocket] WhatsApp Connection Ready` in the logs.
-
-3. **Send commands**
-   
-   Send admin commands directly to the bot's WhatsApp number.
-
-### Admin Commands
-
-All commands must be sent from the admin number configured in `ADMIN_NUMBER`.
-
-#### General Commands
-
-```
-.help
-```
-Show all available commands.
-
-```
-.list
-```
-List all WhatsApp groups with their JIDs (group identifiers).
-
-#### Rule Management
-
-```
-.createRule <title> | <description> | <rule>
-```
-Create a new reusable AI rule for message filtering.
-
-**Example:**
-```
-.createRule Urgent | Forward urgent only | Only forward messages containing 'urgent' or 'ASAP'
-```
-
-**Limits:** Title max 50 chars, description max 200 chars
-
-```
-.getRules
-```
-List all created rules (ID, title, description).
-
-```
-.getRule <ruleId>
-```
-Show full details of a specific rule including where it's used.
-
-**Example:**
-```
-.getRule 1
-```
-
-```
-.removeRule <ruleId>
-```
-Delete a rule (blocked if used in any forward items).
-
-**Example:**
-```
-.removeRule 1
-```
-
-#### Forward Management
-
-```
-.createForward <listenJID> <sendJID> [ruleId1 ruleId2 ...]
-```
-Create a forward item to route messages from one group to another.
-
-**Example:**
-```
-.createForward 120363314139359903@g.us 120363320045260346@g.us 1 2
-```
-
-- No rules = forwards ALL messages
-- With rules = only forwards if AI approves based on rules
-
-```
-.getForwards
-```
-List all forward items with group names and rules.
-
-```
-.getForward <forwardId>
-```
-Show full details of a specific forward item.
-
-```
-.deleteForward <forwardId>
-```
-Delete a forward item.
-
-```
-.linkRule <forwardId> <ruleId>
-```
-Add a rule to an existing forward item.
-
-```
-.unlinkRule <forwardId> <ruleId>
-```
-Remove a rule from a forward item.
-
-### Usage Examples
-
-#### Example 1: Forward All Messages
-
-Forward everything from Group A to Group B:
-
-1. Get group JIDs:
-   ```
-   .list
-   ```
-
-2. Create forward without rules:
-   ```
-   .createForward 120363314139359903@g.us 120363320045260346@g.us
-   ```
-
-#### Example 2: Filter Urgent Messages Only
-
-Forward only urgent messages:
-
-1. Create a rule:
-   ```
-   .createRule Urgent Filter | Only urgent messages | Forward messages containing 'urgent', 'ASAP', or 'important'
-   ```
-
-2. Create forward with the rule:
-   ```
-   .createForward 120363314139359903@g.us 120363320045260346@g.us 1
-   ```
-
-#### Example 3: Multiple Rules
-
-Apply multiple filtering rules:
-
-1. Create rules:
-   ```
-   .createRule Work Only | Work-related filter | Forward messages about work, projects, or deadlines
-   .createRule No Spam | Block spam | Skip promotional messages or advertisements
-   ```
-
-2. Create forward with both rules:
-   ```
-   .createForward 120363314139359903@g.us 120363320045260346@g.us 1 2
-   ```
-
----
-
-## Architecture
-
-### System Overview
-
-```
-WhatsApp Groups
-      |
-      v
- [Message Handler] -----> [Database: Chat table]
-      |                         |
-      |                         v
-      |                   [Cron: Batch Forward]
-      |                         |
-      |                         v
-      |                   [AI Analysis]
-      |                    (with rules)
-      |                         |
-      +-------------------------+
-                |
-                v
-         [AI Decision Tools]
-         - forwardMessages
-         - writeMessages
-         - writeMessagesWithMedia
-         - sendMedia
-         - skipMessages
-         - markMessagesAsSent
-                |
-                v
-          Target Groups
-```
-
-### Data Flow
-
-1. **Message Reception**: Bot receives messages from groups configured in `ForwardItem.listenId`
-2. **Storage**: Messages stored in `Chat` table with `isSent: false`
-3. **Batch Processing**: Cron job runs every N minutes (configurable)
-4. **AI Analysis**: For each forward item, unsent messages are analyzed with associated rules
-5. **Decision & Action**: AI decides to forward, summarize, send media, skip, or mark as sent
-6. **State Update**: Processed messages are marked `isSent: true`
-7. **Cleanup**: Weekly cron job deletes messages older than retention period
-
-### Database Schema
-
-- **ForwardItem**: Many-to-many mapping between listen groups and send groups
-- **SendRule**: Reusable AI rules that can be attached to multiple forward items
-- **Chat**: Message queue with media paths, sent status, and timestamps
-
-### AI Capabilities
-
-The AI can perform the following actions:
-
-- **Forward original messages** unchanged to target groups
-- **Summarize multiple messages** into concise text
-- **Send media with modified captions** to combine text and files
-- **Skip incomplete conversations** (e.g., waiting for question to be answered)
-- **Filter spam/irrelevant messages** by marking them sent without forwarding
-
-The AI considers:
-- Custom rules defined by the user
-- Message fragmentation (combines related short messages)
-- Question-answer patterns (waits for complete context)
-- Message volume (prefers summarization for 3+ messages)
-
----
+## Next Fix & Update
+- Cleanup saved files
+- Rewrite message handler to return the processed message IDs, not just the processed count for error handling
+- Introduce message uniqueness using msg.key.id to prevent duplicate chat
+- add cron run state so cron cannot run when its still running
+- Adding sent chat history for model context
+- File & folder structure refactor
 
 ## License
 
