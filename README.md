@@ -1,5 +1,9 @@
 # AutoForward v2.2 Beta
 
+> **Untested in long run** <br>
+> v2.2b is in _beta_, long term & continuous process are currently being tested.
+> Please refer to a _stable_ version in different branch.
+
 WhatsApp AI Bot that watches your chats, runs each message through rules you define, and routes what matters: forwarded, summarized, or skipped, automatically.
 
 - **AI-Powered Message Analysis**: OpenAI-compatible models route messages intelligently
