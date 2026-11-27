@@ -1,5 +1,9 @@
 import nodeCron from "node-cron";
 import { prismaStorage } from "../../../index.ts";
+import { log } from "../../helper/logger.ts";
+
+const logID = "Message Cleaner"
+const verboseLogID = "cron/msgCronCleanup.ts"
 
 export function msgCronCleanup() {
     const retentionDays = parseInt(process.env.CLEANUP_RETENTION_DAYS || "7")
@@ -8,16 +12,18 @@ export function msgCronCleanup() {
         throw new Error(`[msgCronCleanup] Invalid CLEANUP_RETENTION_DAYS: "${process.env.CLEANUP_RETENTION_DAYS}". Must be a positive integer >= 1.`)
     }
     
-    console.log(`[msgCronCleanup] Cleanup configured: Delete all messages older than ${retentionDays} days (Weekly Sunday 3 AM)`)
+    log.debug(verboseLogID, `Cleanup configured: Delete all messages older than ${retentionDays} days (Weekly Sunday 3 AM)`)
 
     nodeCron.schedule("0 3 * * 0", async () => {
-        console.log("[msgCronCleanup] Weekly cleanup initiated - deleting all old messages")
+        log.info(logID, `Weekly cleanup initiated, deleting all old messages`)
 
         try {
             const count = await prismaStorage.deleteAllOldMessages(retentionDays)
-            console.log(`[msgCronCleanup] Weekly cleanup completed: ${count} message(s) deleted`)
+            log.info(logID, `Weekly cleanup completed: ${count} message(s) deleted`)
         } catch (error) {
-            console.error("[msgCronCleanup] Weekly cleanup failed:", error)
+            log.error(verboseLogID, `Weekly cleanup failed: ${error}`)
         }
+    }, {
+        missedExecutionTolerance: 60 * 60 * 1000
     })
 }

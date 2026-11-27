@@ -3,6 +3,11 @@ import { createWriteStream } from "fs";
 import { readFile, unlink } from "fs/promises";
 import { v4 as UUID } from "uuid";
 import sharp from "sharp";
+import path from "path"
+import { log } from "./logger.ts";
+
+const logID = "Media Downloader"
+const verboseLogID = "helper/downloadMedia.ts"
 
 type MediaResult = {
     filename: string
@@ -21,7 +26,7 @@ async function compressImage(inputPath: string, outputPath: string): Promise<voi
 
 export async function downloadMedia(msg: WAMessage, contentType: string): Promise<MediaResult | undefined> {
     try {
-        console.log(`[downloadMedia] Starting download for contentType: ${contentType}`)
+        log.info(logID, `Starting download for contentType: ${contentType}`)
         
         // set the mimetype and default extension based on the content type
         let mimeType: string | null | undefined
@@ -62,9 +67,9 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
             
             defaultExt = extractedExt
             isDocument = true
-            console.log(`[downloadMedia] Document detected - mimetype: ${mimeType}, original filename: ${originalFilename}`)
+            log.debug(verboseLogID, `Document detected - mimetype: ${mimeType}, original filename: ${originalFilename}`)
         } else {
-            console.log(`[downloadMedia] Unknown contentType: ${contentType}`)
+            log.debug(verboseLogID, `Unknown contentType: ${contentType}`)
             return undefined
         }
 
@@ -78,7 +83,7 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
             
             if (originalFilename) {
                 // Sanitize filename (remove dangerous characters but keep spaces)
-                finalFilename = originalFilename.replace(/[<>:"|?*]/g, '_')
+                finalFilename = (path.basename(originalFilename).replace(/[^a-zA-Z0-9 ._-]/g, '_').replace(/^\.+/, '').replace(/\.{2,}/g, '.').trim() || `unnamed_file.${defaultExt}`)
             } else {
                 finalFilename = `document_${UUID()}.${defaultExt}`
             }
@@ -113,14 +118,14 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
             // delete temp file
             await unlink(`./storage/media/${tempFilename}`)
             
-            console.log(`[downloadMedia] Image saved and compressed: ${finalFilename} (vision disabled)`)
+            log.info(logID, `Image saved: ${finalFilename}`)
             
             return {
                 filename: finalFilename,
                 base64Url: ""
             }
         } else if (isVideo) {
-            console.log(`[downloadMedia] Video saved: ${tempFilename} (vision disabled)`)
+            log.info(logID, `Video saved: ${tempFilename}`)
             
             return {
                 filename: tempFilename,
@@ -131,7 +136,7 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
             const fs = await import('fs/promises')
             await fs.rename(`./storage/media/${tempFilename}`, `./storage/media/${finalFilename}`)
             
-            console.log(`[downloadMedia] Document saved: ${finalFilename}`)
+            log.info(logID, `Document saved: ${finalFilename}`)
             
             return {
                 filename: finalFilename,
@@ -141,7 +146,7 @@ export async function downloadMedia(msg: WAMessage, contentType: string): Promis
         
         return undefined
     } catch (error) {
-        console.error(`[downloadMedia] Failed to download ${contentType}, skipping:`, error)
+        log.error(verboseLogID, `Failed to download ${contentType}, skipping:`, error)
         return undefined
     }
 }

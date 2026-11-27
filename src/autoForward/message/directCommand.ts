@@ -1,6 +1,10 @@
 import type { WAMessage } from "@whiskeysockets/baileys";
 import { cacheStorage, prismaStorage, socket } from "../../../index.ts";
 import { parseCreateRule } from "../../helper/parseCreateRule.ts";
+import { log } from "../../helper/logger.ts";
+
+const logID = "Admin Chat Receiver"
+const verboseLogID = "message/directCommand.ts"
 
 export async function directCommand(msg: WAMessage, converstation: string) {
     const sock = socket.getSocket()
@@ -77,7 +81,7 @@ FORWARD MANAGEMENT:
         const parsed = parseCreateRule(converstation)
 
         if (!parsed) {
-            console.error("[directCommand] Failed to parse .createRule command")
+            log.error(verboseLogID, "Failed to parse .createRule command")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.createRule <title> | <description> | <rule>\n\nExample:\n.createRule Urgent | Forward urgent only | Only forward messages containing 'urgent' or 'ASAP'\n\nLimits: title max 50 chars, description max 200 chars, no pipes (|) allowed in content" 
             }, { quoted: msg })
@@ -91,7 +95,7 @@ FORWARD MANAGEMENT:
                 text: `Rule created successfully!\n\nID: ${newRule.id}\nTitle: ${newRule.title}\nDescription: ${newRule.description}` 
             }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to create rule:", error)
+            log.error(verboseLogID, "Failed to create rule:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to create rule. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -103,7 +107,7 @@ FORWARD MANAGEMENT:
         const ruleIdStr = parts[1]
 
         if (!ruleIdStr) {
-            console.error("[directCommand] Invalid .removeRule command - no rule ID provided")
+            log.error(verboseLogID, "Invalid .removeRule command - no rule ID provided")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.removeRule <ruleId>\n\nExample:\n.removeRule 1" 
             }, { quoted: msg })
@@ -113,7 +117,7 @@ FORWARD MANAGEMENT:
         const ruleId = parseInt(ruleIdStr)
 
         if (isNaN(ruleId)) {
-            console.error("[directCommand] Invalid .removeRule command - rule ID is not a number")
+            log.error(verboseLogID, "Invalid .removeRule command - rule ID is not a number")
             sock.sendMessage(jid, { 
                 text: "Rule ID must be a number.\n\nUsage:\n.removeRule <ruleId>" 
             }, { quoted: msg })
@@ -127,7 +131,7 @@ FORWARD MANAGEMENT:
                 text: `Rule deleted successfully!\n\nID: ${deletedRule.id}\nTitle: ${deletedRule.title}` 
             }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to delete rule:", error)
+            log.error(verboseLogID, "Failed to delete rule:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to delete rule. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -152,7 +156,7 @@ FORWARD MANAGEMENT:
 
             sock.sendMessage(jid, { text: text.trim() }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to get rules:", error)
+            log.error(verboseLogID, "Failed to get rules:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to get rules. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -164,7 +168,7 @@ FORWARD MANAGEMENT:
         const ruleIdStr = parts[1]
 
         if (!ruleIdStr) {
-            console.error("[directCommand] Invalid .getRule command - no rule ID provided")
+            log.error(verboseLogID, "Invalid .getRule command - no rule ID provided")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.getRule <ruleId>\n\nExample:\n.getRule 1" 
             }, { quoted: msg })
@@ -174,7 +178,7 @@ FORWARD MANAGEMENT:
         const ruleId = parseInt(ruleIdStr)
 
         if (isNaN(ruleId)) {
-            console.error("[directCommand] Invalid .getRule command - rule ID is not a number")
+            log.error(verboseLogID, "Invalid .getRule command - rule ID is not a number")
             sock.sendMessage(jid, { 
                 text: "Rule ID must be a number.\n\nUsage:\n.getRule <ruleId>" 
             }, { quoted: msg })
@@ -208,7 +212,7 @@ FORWARD MANAGEMENT:
 
             sock.sendMessage(jid, { text: text }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to get rule:", error)
+            log.error(verboseLogID, "Failed to get rule:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to get rule. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -220,7 +224,7 @@ FORWARD MANAGEMENT:
         
         // .createForward <listenJID> <sendJID> [ruleId1 ruleId2 ...]
         if (parts.length < 3) {
-            console.error("[directCommand] Invalid .createForward command - not enough arguments")
+            log.error(verboseLogID, "Invalid .createForward command - not enough arguments")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.createForward <listenJID> <sendJID> [ruleId1 ruleId2 ...]\n\nExample:\n.createForward 120363@g.us 120364@g.us 1 2\n\nNo rules = forwards ALL messages\nWith rules = only forwards if AI approves" 
             }, { quoted: msg })
@@ -231,7 +235,7 @@ FORWARD MANAGEMENT:
         const sendJID = parts[2]
 
         if (!listenJID || !sendJID) {
-            console.error("[directCommand] Invalid .createForward command - missing JIDs")
+            log.error(verboseLogID, "Invalid .createForward command - missing JIDs")
             sock.sendMessage(jid, { 
                 text: "Both listen and send JIDs are required." 
             }, { quoted: msg })
@@ -245,7 +249,7 @@ FORWARD MANAGEMENT:
         const sendGroupName = await cacheStorage.getGroupName(sendJID)
 
         if (!listenGroupName) {
-            console.error("[directCommand] Listen JID not found in group list")
+            log.error(verboseLogID, "Listen JID not found in group list")
             sock.sendMessage(jid, { 
                 text: `Listen group JID not found: ${listenJID}\n\nUse .list to see available groups.` 
             }, { quoted: msg })
@@ -253,7 +257,7 @@ FORWARD MANAGEMENT:
         }
 
         if (!sendGroupName) {
-            console.error("[directCommand] Send JID not found in group list")
+            log.error(verboseLogID, "Send JID not found in group list")
             sock.sendMessage(jid, { 
                 text: `Send group JID not found: ${sendJID}\n\nUse .list to see available groups.` 
             }, { quoted: msg })
@@ -283,7 +287,7 @@ FORWARD MANAGEMENT:
 
             sock.sendMessage(jid, { text }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to create forward item:", error)
+            log.error(verboseLogID, "Failed to create forward item:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to create forward item. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -319,7 +323,7 @@ FORWARD MANAGEMENT:
 
             sock.sendMessage(jid, { text: text.trim() }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to get forward items:", error)
+            log.error(verboseLogID, "Failed to get forward items:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to get forward items. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -331,7 +335,7 @@ FORWARD MANAGEMENT:
         const forwardIdStr = parts[1]
 
         if (!forwardIdStr) {
-            console.error("[directCommand] Invalid .getForward command - no forward ID provided")
+            log.error(verboseLogID, "Invalid .getForward command - no forward ID provided")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.getForward <forwardId>\n\nExample:\n.getForward 1" 
             }, { quoted: msg })
@@ -341,7 +345,7 @@ FORWARD MANAGEMENT:
         const forwardId = parseInt(forwardIdStr)
 
         if (isNaN(forwardId)) {
-            console.error("[directCommand] Invalid .getForward command - forward ID is not a number")
+            log.error(verboseLogID, "Invalid .getForward command - forward ID is not a number")
             sock.sendMessage(jid, { 
                 text: "Forward ID must be a number.\n\nUsage:\n.getForward <forwardId>" 
             }, { quoted: msg })
@@ -379,7 +383,7 @@ FORWARD MANAGEMENT:
 
             sock.sendMessage(jid, { text: text.trim() }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to get forward item:", error)
+            log.error(verboseLogID, "Failed to get forward item:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to get forward item. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -391,7 +395,7 @@ FORWARD MANAGEMENT:
         const forwardIdStr = parts[1]
 
         if (!forwardIdStr) {
-            console.error("[directCommand] Invalid .deleteForward command - no forward ID provided")
+            log.error(verboseLogID, "Invalid .deleteForward command - no forward ID provided")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.deleteForward <forwardId>\n\nExample:\n.deleteForward 1" 
             }, { quoted: msg })
@@ -401,7 +405,7 @@ FORWARD MANAGEMENT:
         const forwardId = parseInt(forwardIdStr)
 
         if (isNaN(forwardId)) {
-            console.error("[directCommand] Invalid .deleteForward command - forward ID is not a number")
+            log.error(verboseLogID, "Invalid .deleteForward command - forward ID is not a number")
             sock.sendMessage(jid, { 
                 text: "Forward ID must be a number.\n\nUsage:\n.deleteForward <forwardId>" 
             }, { quoted: msg })
@@ -418,7 +422,7 @@ FORWARD MANAGEMENT:
                 text: `Forward item deleted successfully!\n\nID: ${deletedForward.id}\n${listenName} → ${sendName}` 
             }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to delete forward item:", error)
+            log.error(verboseLogID, "Failed to delete forward item:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to delete forward item. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -431,7 +435,7 @@ FORWARD MANAGEMENT:
         const ruleIdStr = parts[2]
 
         if (!forwardIdStr || !ruleIdStr) {
-            console.error("[directCommand] Invalid .linkRule command - missing arguments")
+            log.error(verboseLogID, "Invalid .linkRule command - missing arguments")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.linkRule <forwardId> <ruleId>\n\nExample:\n.linkRule 1 2" 
             }, { quoted: msg })
@@ -442,7 +446,7 @@ FORWARD MANAGEMENT:
         const ruleId = parseInt(ruleIdStr)
 
         if (isNaN(forwardId) || isNaN(ruleId)) {
-            console.error("[directCommand] Invalid .linkRule command - IDs must be numbers")
+            log.error(verboseLogID, "Invalid .linkRule command - IDs must be numbers")
             sock.sendMessage(jid, { 
                 text: "Both forward ID and rule ID must be numbers.\n\nUsage:\n.linkRule <forwardId> <ruleId>" 
             }, { quoted: msg })
@@ -461,7 +465,7 @@ FORWARD MANAGEMENT:
                 text: `Rule linked successfully!\n\nForward: ${listenName} → ${sendName}\nRule: [${ruleId}] ${linkedRule?.title ?? 'Unknown'}\n\nTotal rules: ${updatedForward.rules.length}` 
             }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to link rule:", error)
+            log.error(verboseLogID, "Failed to link rule:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to link rule. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
@@ -474,7 +478,7 @@ FORWARD MANAGEMENT:
         const ruleIdStr = parts[2]
 
         if (!forwardIdStr || !ruleIdStr) {
-            console.error("[directCommand] Invalid .unlinkRule command - missing arguments")
+            log.error(verboseLogID, "Invalid .unlinkRule command - missing arguments")
             sock.sendMessage(jid, { 
                 text: "Invalid format. Usage:\n.unlinkRule <forwardId> <ruleId>\n\nExample:\n.unlinkRule 1 2" 
             }, { quoted: msg })
@@ -485,7 +489,7 @@ FORWARD MANAGEMENT:
         const ruleId = parseInt(ruleIdStr)
 
         if (isNaN(forwardId) || isNaN(ruleId)) {
-            console.error("[directCommand] Invalid .unlinkRule command - IDs must be numbers")
+            log.error(verboseLogID, "Invalid .unlinkRule command - IDs must be numbers")
             sock.sendMessage(jid, { 
                 text: "Both forward ID and rule ID must be numbers.\n\nUsage:\n.unlinkRule <forwardId> <ruleId>" 
             }, { quoted: msg })
@@ -502,152 +506,10 @@ FORWARD MANAGEMENT:
                 text: `Rule unlinked successfully!\n\nForward: ${listenName} → ${sendName}\nRule ID: ${ruleId}\n\nRemaining rules: ${updatedForward.rules.length}` 
             }, { quoted: msg })
         } catch (error) {
-            console.error("[directCommand] Failed to unlink rule:", error)
+            log.error(verboseLogID, "Failed to unlink rule:", error)
             sock.sendMessage(jid, { 
                 text: `Failed to unlink rule. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
             }, { quoted: msg })
         }
     }
-
-    // ...
-
-    // OUTDATED - TODO: Rewrite with new command structure using prismaStorage
-    // All commands below are disabled until rewrite
-    
-    /*
-    // !listenTo            =>  Set group to listen to according to the group id
-    if (converstation.split(" ")[0] === ".listenTo") {
-        const groupJID = converstation.split(" ")[1]
-        
-        if (!groupJID) {
-            sock.sendMessage(jid, { text: "I can't find the group JID you want me to listen to." }, { quoted: msg })
-            return
-        }
-
-        const groupName = await cacheStorage.getGroupName(groupJID ?? "")
-
-        if (!groupName) {
-            sock.sendMessage(jid, { text: "I dont think that group JID exist." }, { quoted: msg })
-            return
-        }
-
-        try {
-            await fileStorage.addGroup(groupJID)
-
-            sock.sendMessage(jid, { text: `I am now listening for message in ${groupName}` }, { quoted: msg })
-        } catch (error) {
-            sock.sendMessage(jid, { text: `I think i am listening to that group already` }, { quoted: msg })            
-        }
-    }
-
-    // !sendTo              =>  Set group to sendTo according to the group id and the criteria to send
-    if (converstation.split(" ")[0] === ".sendTo") {
-        const parts = converstation.split(" ")
-        const groupJID = parts[1]
-        const criteria = parts.slice(2).join(" ")
-        
-        if (!groupJID) {
-            sock.sendMessage(jid, { text: "I can't find the group JID you want me to send to." }, { quoted: msg })
-            return
-        }
-
-        if (!criteria) {
-            sock.sendMessage(jid, { text: "Please provide a criteria for forwarding messages." }, { quoted: msg })
-            return
-        }
-
-        const groupName = await cacheStorage.getGroupName(groupJID)
-
-        if (!groupName) {
-            sock.sendMessage(jid, { text: "I dont think that group JID exist." }, { quoted: msg })
-            return
-        }
-
-        try {
-            await fileStorage.addForwardRule(groupJID, criteria)
-
-            sock.sendMessage(jid, { text: `I will now forward messages to ${groupName} based on criteria: "${criteria}"` }, { quoted: msg })
-        } catch (error) {
-            sock.sendMessage(jid, { text: `I think that group already has a forward rule set.` }, { quoted: msg })            
-        }
-    }
-
-    // !removeSendTo        =>  Remove forward rule for a specific group
-    if (converstation.split(" ")[0] === ".removeSendTo") {
-        const groupJID = converstation.split(" ")[1]
-        
-        if (!groupJID) {
-            sock.sendMessage(jid, { text: "I can't find the group JID you want me to remove." }, { quoted: msg })
-            return
-        }
-
-        try {
-            const groupName = await cacheStorage.getGroupName(groupJID) ?? groupJID
-
-            await fileStorage.removeForwardRule(groupJID)
-
-            sock.sendMessage(jid, { text: `I removed the forward rule for ${groupName}` }, { quoted: msg })
-        } catch (error) {
-            sock.sendMessage(jid, { text: `I don't think that group has a forward rule.` }, { quoted: msg })            
-        }
-    }
-
-    // !removeListenTo      =>  Remove group from listen list
-    if (converstation.split(" ")[0] === ".removeListenTo") {
-        const groupJID = converstation.split(" ")[1]
-        
-        if (!groupJID) {
-            sock.sendMessage(jid, { text: "I can't find the group JID you want me to stop listening to." }, { quoted: msg })
-            return
-        }
-
-        try {
-            const groupName = await cacheStorage.getGroupName(groupJID) ?? groupJID
-
-            await fileStorage.removeListenGroup(groupJID)
-
-            sock.sendMessage(jid, { text: `I stopped listening to ${groupName}` }, { quoted: msg })
-        } catch (error) {
-            sock.sendMessage(jid, { text: `I don't think I'm listening to that group.` }, { quoted: msg })            
-        }
-    }
-
-    // !check               => complete status of the current state
-    if (converstation === ".check") {
-        let statusMSG = ""
-
-        const groupsJID = await fileStorage.getListenGroups()
-        const forwardRules = await fileStorage.getForwardRules()
-
-        // Listen Groups Section
-        if (groupsJID.length > 0) {
-            statusMSG += "I am listening to these groups:\n"
-
-            for (const [i, groupJID] of groupsJID.entries()) {
-                const groupName = await cacheStorage.getGroupName(groupJID) ?? "[Non Exist]"
-
-                statusMSG += `${i + 1}. ${groupName} (${groupJID})\n`
-            }
-        } else {
-            statusMSG += "I am not listening to any group right now.\n"
-        }
-
-        statusMSG += "\n"
-
-        // Forward Rules Section
-        if (forwardRules.length > 0) {
-            statusMSG += "I am forwarding messages to these groups:\n"
-
-            for (const [i, rule] of forwardRules.entries()) {
-                const groupName = await cacheStorage.getGroupName(rule.sendToGroupJID) ?? "[Non Exist]"
-
-                statusMSG += `${i + 1}. ${groupName} (${rule.sendToGroupJID})\n   Criteria: "${rule.criteria}"\n`
-            }
-        } else {
-            statusMSG += "I am not forwarding messages to any group right now."
-        }
-
-        sock.sendMessage(jid, { text: statusMSG }, { quoted: msg })
-    }
-    */
 }

@@ -35,3 +35,6 @@ auth/
 .claude/
 .windsurf/
 skills-lock.json
+
+# Local UI preview screenshots
+.preview/

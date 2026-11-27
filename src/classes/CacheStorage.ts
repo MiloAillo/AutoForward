@@ -1,6 +1,10 @@
 import NodeCache from "node-cache";
 import { socket } from "../../index.ts";
 import type { GroupMetadata } from "@whiskeysockets/baileys";
+import { log } from "../helper/logger.ts";
+
+const logID = "Cache Storage"
+// const verboseLogID = "classes/CacheStorage.ts"
 
 export class CacheStorage {
     private groups: NodeCache;
@@ -19,16 +23,23 @@ export class CacheStorage {
         let cachedGroups = this.groups.get<Record<string, GroupMetadata>>('groups');
 
         if (!cachedGroups) {
-            const sock = socket.getSocket();
-            if (!sock) {
-                throw new Error("Socket is not initialized or connected.");
-            }
+            try {
+                if (socket.getStatus() !== "open") {
+                    return {};
+                }
 
-            cachedGroups = await sock.groupFetchAllParticipating();
-            this.groups.set('groups', cachedGroups);
+                const sock = socket.getSocket();
+                if (!sock) return {};
+
+                cachedGroups = await sock.groupFetchAllParticipating();
+                this.groups.set('groups', cachedGroups);
+            } catch (err: any) {
+                log.warn(logID, `Failed to fetch groups: ${err?.message || err}`);
+                return {};
+            }
         }
 
-        return cachedGroups;
+        return cachedGroups ?? {};
     }
 
     /**

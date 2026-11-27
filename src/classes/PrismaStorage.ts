@@ -1,6 +1,10 @@
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import type { WAMessage } from "@whiskeysockets/baileys";
 import { PrismaClient } from "../../generated/prisma/client.ts"
+import { log } from "../helper/logger.ts"
+
+// const logID = "Prisma Storage"
+const verboseLogID = "classes/PrismaStorage.ts"
 
 type createRuleType = {
     title: string
@@ -47,10 +51,10 @@ export class PrismaStorage {
                 data: { title, description, rule }
             })
 
-            console.log(`[PrismaStorage] Created rule: ${newRule.title} (ID: ${newRule.id})`)
+            log.debug(verboseLogID, `Created rule: ${newRule.title} (ID: ${newRule.id})`)
             return newRule
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to create rule:`, error)
+            log.error(verboseLogID, `Failed to create rule:`, error)
             throw error
         }
     }
@@ -74,10 +78,10 @@ export class PrismaStorage {
                 where: { id }
             })
 
-            console.log(`[PrismaStorage] Deleted rule: ${deletedRule.title} (ID: ${deletedRule.id})`)
+            log.debug(verboseLogID, `Deleted rule: ${deletedRule.title} (ID: ${deletedRule.id})`)
             return deletedRule
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to delete rule:`, error)
+            log.error(verboseLogID, `Failed to delete rule:`, error)
             throw error
         }
     }
@@ -92,10 +96,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${rules.length} rules`)
+            log.debug(verboseLogID, `Fetched ${rules.length} rules`)
             return rules
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch rules:`, error)
+            log.error(verboseLogID, `Failed to fetch rules:`, error)
             throw error
         }
     }
@@ -116,14 +120,14 @@ export class PrismaStorage {
             })
 
             if (rule) {
-                console.log(`[PrismaStorage] Fetched rule: ${rule.title} (ID: ${rule.id})`)
+                log.debug(verboseLogID, `Fetched rule: ${rule.title} (ID: ${rule.id})`)
             } else {
-                console.log(`[PrismaStorage] Rule with ID ${id} not found`)
+                log.debug(verboseLogID, `Rule with ID ${id} not found`)
             }
 
             return rule
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch rule:`, error)
+            log.error(verboseLogID, `Failed to fetch rule:`, error)
             throw error
         }
     }
@@ -143,10 +147,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Created forward item: ${newForwardItem.listenId} → ${newForwardItem.sendId} (ID: ${newForwardItem.id})`)
+            log.debug(verboseLogID, `Created forward item: ${newForwardItem.listenId} → ${newForwardItem.sendId} (ID: ${newForwardItem.id})`)
             return newForwardItem
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to create forward item:`, error)
+            log.error(verboseLogID, `Failed to create forward item:`, error)
             throw error
         }
     }
@@ -160,10 +164,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Deleted forward item: ${deletedForwardItem.listenId} → ${deletedForwardItem.sendId} (ID: ${deletedForwardItem.id})`)
+            log.debug(verboseLogID, `Deleted forward item: ${deletedForwardItem.listenId} → ${deletedForwardItem.sendId} (ID: ${deletedForwardItem.id})`)
             return deletedForwardItem
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to delete forward item:`, error)
+            log.error(verboseLogID, `Failed to delete forward item:`, error)
             throw error
         }
     }
@@ -185,10 +189,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${forwards.length} forward items${listenId ? ` for listenId: ${listenId}` : ''}`)
+            log.debug(verboseLogID, `Fetched ${forwards.length} forward items${listenId ? ` for listenId: ${listenId}` : ''}`)
             return forwards
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch forward items:`, error)
+            log.error(verboseLogID, `Failed to fetch forward items:`, error)
             throw error
         }
     }
@@ -203,14 +207,14 @@ export class PrismaStorage {
             })
 
             if (forward) {
-                console.log(`[PrismaStorage] Fetched forward item: ${forward.listenId} → ${forward.sendId} (ID: ${forward.id})`)
+                log.debug(verboseLogID, `Fetched forward item: ${forward.listenId} → ${forward.sendId} (ID: ${forward.id})`)
             } else {
-                console.log(`[PrismaStorage] Forward item with ID ${id} not found`)
+                log.debug(verboseLogID, `Forward item with ID ${id} not found`)
             }
 
             return forward
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch forward item:`, error)
+            log.error(verboseLogID, `Failed to fetch forward item:`, error)
             throw error
         }
     }
@@ -229,10 +233,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Linked rule ${ruleId} to forward item ${forwardId}`)
+            log.debug(verboseLogID, `Linked rule ${ruleId} to forward item ${forwardId}`)
             return updatedForwardItem
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to link rule:`, error)
+            log.error(verboseLogID, `Failed to link rule:`, error)
             throw error
         }
     }
@@ -251,10 +255,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Unlinked rule ${ruleId} from forward item ${forwardId}`)
+            log.debug(verboseLogID, `Unlinked rule ${ruleId} from forward item ${forwardId}`)
             return updatedForwardItem
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to unlink rule:`, error)
+            log.error(verboseLogID, `Failed to unlink rule:`, error)
             throw error
         }
     }
@@ -271,10 +275,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Added message to forward item ${forwardItemId} (Message ID: ${newMessage.id})`)
+            log.debug(verboseLogID, `Added message to forward item ${forwardItemId} (Message ID: ${newMessage.id})`)
             return newMessage
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to add message:`, error)
+            log.error(verboseLogID, `Failed to add message:`, error)
             throw error
         }
     }
@@ -290,10 +294,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Marked ${result.count} message(s) as sent`)
+            log.debug(verboseLogID, `Marked ${result.count} message(s) as sent`)
             return result.count
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to mark messages as sent:`, error)
+            log.error(verboseLogID, `Failed to mark messages as sent:`, error)
             throw error
         }
     }
@@ -306,10 +310,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Deleted ${result.count} message(s) from chat history`)
+            log.debug(verboseLogID, `Deleted ${result.count} message(s) from chat history`)
             return result.count
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to delete messages:`, error)
+            log.error(verboseLogID, `Failed to delete messages:`, error)
             throw error
         }
     }
@@ -325,10 +329,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${chats.length} chat(s) by IDs`)
+            log.debug(verboseLogID, `Fetched ${chats.length} chat(s) by IDs`)
             return chats
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch chats by IDs:`, error)
+            log.error(verboseLogID, `Failed to fetch chats by IDs:`, error)
             throw error
         }
     }
@@ -351,10 +355,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${messages.length} unsent message(s)`)
+            log.debug(verboseLogID, `Fetched ${messages.length} unsent message(s)`)
             return messages
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch unsent messages:`, error)
+            log.error(verboseLogID, `Failed to fetch unsent messages:`, error)
             throw error
         }
     }
@@ -382,10 +386,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${forwards.length} forward item(s) with unsent messages`)
+            log.debug(verboseLogID, `Fetched ${forwards.length} forward item(s) with unsent messages`)
             return forwards
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch forwards with unsent messages:`, error)
+            log.error(verboseLogID, `Failed to fetch forwards with unsent messages:`, error)
             throw error
         }
     }
@@ -408,10 +412,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Fetched ${forwards.length} forward item(s) with messages`)
+            log.debug(verboseLogID, `Fetched ${forwards.length} forward item(s) with messages`)
             return forwards
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to fetch forwards with messages:`, error)
+            log.error(verboseLogID, `Failed to fetch forwards with messages:`, error)
             throw error
         }
     }
@@ -430,10 +434,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Deleted ${result.count} unsent message(s) older than ${daysThreshold} days`)
+            log.debug(verboseLogID, `Deleted ${result.count} unsent message(s) older than ${daysThreshold} days`)
             return result.count
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to delete old unsent messages:`, error)
+            log.error(verboseLogID, `Failed to delete old unsent messages:`, error)
             throw error
         }
     }
@@ -451,10 +455,10 @@ export class PrismaStorage {
                 }
             })
 
-            console.log(`[PrismaStorage] Deleted ${result.count} message(s) older than ${daysThreshold} days`)
+            log.debug(verboseLogID, `Deleted ${result.count} message(s) older than ${daysThreshold} days`)
             return result.count
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to delete all old messages:`, error)
+            log.error(verboseLogID, `Failed to delete all old messages:`, error)
             throw error
         }
     }
@@ -462,10 +466,20 @@ export class PrismaStorage {
     async disconnect() {
         try {
             await this.prisma.$disconnect()
-            console.log(`[PrismaStorage] Disconnected from database`)
+            log.debug(verboseLogID, `Disconnected from database`)
         } catch (error) {
-            console.error(`[PrismaStorage] Failed to disconnect:`, error)
+            log.error(verboseLogID, `Failed to disconnect:`, error)
             throw error
+        }
+    }
+
+    async checkHealth(): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
+        const start = Date.now()
+        try {
+            await this.prisma.$queryRaw`SELECT 1`
+            return { ok: true, latencyMs: Date.now() - start }
+        } catch (error: any) {
+            return { ok: false, error: error?.message ?? "Database unreachable" }
         }
     }
 }

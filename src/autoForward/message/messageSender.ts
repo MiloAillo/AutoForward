@@ -1,6 +1,11 @@
 import type { WAMessage } from "@whiskeysockets/baileys";
 import { readFileSync } from "fs";
 import { socket } from "../../../index.ts";
+import path from "path";
+import { log } from "../../helper/logger.ts";
+
+// const logID = "Message Sender"
+const verboseLogID = "message/messageSender.ts"
 
 const RATE_LIMIT_MS = 1000;
 
@@ -10,7 +15,7 @@ async function delay(ms: number): Promise<void> {
 
 export async function forwardMessages(msgs: WAMessage[], jid: string): Promise<number> {
     const sock = socket.getSocket();
-    console.log(`[messageSender] ForwardMessages running with ${msgs.length} message(s)`);
+    log.debug(verboseLogID, `ForwardMessages running with ${msgs.length} message(s)`);
 
     let sentCount = 0;
     for (let i = 0; i < msgs.length; i++) {
@@ -20,13 +25,13 @@ export async function forwardMessages(msgs: WAMessage[], jid: string): Promise<n
         try {
             await sock.sendMessage(jid, { forward: msg });
             sentCount++;
-            console.log(`[messageSender] Forwarded ${i + 1}/${msgs.length} message(s)`);
+            log.debug(verboseLogID, `Forwarded ${i + 1}/${msgs.length} message(s)`);
             
             if (i < msgs.length - 1) {
                 await delay(RATE_LIMIT_MS);
             }
         } catch (error) {
-            console.log(`[messageSender] Failed to forward message ${i + 1}, `, error);
+            log.error(verboseLogID, `Failed to forward message ${i + 1}, `, error);
         }
     }
     
@@ -35,7 +40,7 @@ export async function forwardMessages(msgs: WAMessage[], jid: string): Promise<n
 
 export async function writeMessages(texts: string[], jid: string): Promise<number> {
     const sock = socket.getSocket();
-    console.log(`[messageSender] writeMessages running with ${texts.length} text(s)`);
+    log.debug(verboseLogID, `writeMessages running with ${texts.length} text(s)`);
 
     let sentCount = 0;
     for (let i = 0; i < texts.length; i++) {
@@ -45,13 +50,13 @@ export async function writeMessages(texts: string[], jid: string): Promise<numbe
         try {
             await sock.sendMessage(jid, { text: text });
             sentCount++;
-            console.log(`[messageSender] Sent ${i + 1}/${texts.length} text(s)`);
+            log.debug(verboseLogID, `Sent ${i + 1}/${texts.length} text(s)`);
             
             if (i < texts.length - 1) {
                 await delay(RATE_LIMIT_MS);
             }
         } catch (error) {
-            console.log(`[messageSender] Failed to send text ${i + 1}, `, error);
+            log.error(verboseLogID, `Failed to send text ${i + 1}, `, error);
         }
     }
     
@@ -65,7 +70,7 @@ export async function forwardAndWriteMessages(
     flow: "forward-first" | "write-first"
 ): Promise<{ forwardCount: number, textCount: number }> {
     const sock = socket.getSocket();
-    console.log(`[messageSender] forwardAndWriteMessages running with ${msgs.length} message(s) and ${texts.length} text(s)`);
+    log.debug(verboseLogID, `forwardAndWriteMessages running with ${msgs.length} message(s) and ${texts.length} text(s)`);
 
     let forwardCount = 0;
     let textCount = 0;
@@ -79,13 +84,13 @@ export async function forwardAndWriteMessages(
             try {
                 await sock.sendMessage(jid, { forward: msg });
                 forwardCount++;
-                console.log(`[messageSender] Forwarded ${i + 1}/${msgs.length} message(s)`);
+                log.debug(verboseLogID, `Forwarded ${i + 1}/${msgs.length} message(s)`);
                 
                 if (i < msgs.length - 1) {
                     await delay(RATE_LIMIT_MS);
                 }
             } catch (error) {
-                console.log(`[messageSender] Failed to forward message ${i + 1}, `, error);
+                log.error(verboseLogID, `Failed to forward message ${i + 1}, `, error);
             }
         }
         
@@ -102,13 +107,13 @@ export async function forwardAndWriteMessages(
             try {
                 await sock.sendMessage(jid, { text: text });
                 textCount++;
-                console.log(`[messageSender] Sent ${i + 1}/${texts.length} text(s)`);
+                log.debug(verboseLogID, `Sent ${i + 1}/${texts.length} text(s)`);
                 
                 if (i < texts.length - 1) {
                     await delay(RATE_LIMIT_MS);
                 }
             } catch (error) {
-                console.log(`[messageSender] Failed to send text ${i + 1}, `, error);
+                log.error(verboseLogID, `Failed to send text ${i + 1}, `, error);
             }
         }
     } else if (flow === "write-first") {
@@ -120,13 +125,13 @@ export async function forwardAndWriteMessages(
             try {
                 await sock.sendMessage(jid, { text: text });
                 textCount++;
-                console.log(`[messageSender] Sent ${i + 1}/${texts.length} text(s)`);
+                log.debug(verboseLogID, `Sent ${i + 1}/${texts.length} text(s)`);
                 
                 if (i < texts.length - 1) {
                     await delay(RATE_LIMIT_MS);
                 }
             } catch (error) {
-                console.log(`[messageSender] Failed to send text ${i + 1}, `, error);
+                log.error(verboseLogID, `Failed to send text ${i + 1}, `, error);
             }
         }
 
@@ -143,17 +148,17 @@ export async function forwardAndWriteMessages(
             try {
                 await sock.sendMessage(jid, { forward: msg });
                 forwardCount++;
-                console.log(`[messageSender] Forwarded ${i + 1}/${msgs.length} message(s)`);
+                log.debug(verboseLogID, `Forwarded ${i + 1}/${msgs.length} message(s)`);
                 
                 if (i < msgs.length - 1) {
                     await delay(RATE_LIMIT_MS);
                 }
             } catch (error) {
-                console.log(`[messageSender] Failed to forward message ${i + 1}, `, error);
+                log.error(verboseLogID, `Failed to forward message ${i + 1}, `, error);
             }
         }
     } else {
-        console.log(`[messageSender] Critical Error: flow parameter received unknown value.`);
+        log.error(verboseLogID, `Critical Error: flow parameter received unknown value.`);
     }
     
     return { forwardCount, textCount };
@@ -168,7 +173,7 @@ export async function sendMediaWithCaption(
     jid: string
 ): Promise<number> {
     const sock = socket.getSocket();
-    console.log(`[messageSender] sendMediaWithCaption running with ${mediaItems.length} media item(s)`);
+    log.debug(verboseLogID, `sendMediaWithCaption running with ${mediaItems.length} media item(s)`);
 
     let sentCount = 0;
     for (let i = 0; i < mediaItems.length; i++) {
@@ -178,7 +183,7 @@ export async function sendMediaWithCaption(
         const { mediaPath, mediaType, caption } = item;
         
         try {
-            const filePath = `./storage/media/${mediaPath}`;
+            const filePath = `./storage/media/${path.basename(mediaPath)}`;
             const mediaBuffer = readFileSync(filePath);
             
             let content: any;
@@ -218,13 +223,13 @@ export async function sendMediaWithCaption(
             
             await sock.sendMessage(jid, content);
             sentCount++;
-            console.log(`[messageSender] Sent ${i + 1}/${mediaItems.length} media item(s) (${mediaType})`);
+            log.debug(verboseLogID, `Sent ${i + 1}/${mediaItems.length} media item(s) (${mediaType})`);
             
             if (i < mediaItems.length - 1) {
                 await delay(RATE_LIMIT_MS);
             }
         } catch (error) {
-            console.log(`[messageSender] Failed to send media ${i + 1} (${mediaPath}), `, error);
+            log.error(verboseLogID, `Failed to send media ${i + 1} (${mediaPath}), `, error);
         }
     }
     

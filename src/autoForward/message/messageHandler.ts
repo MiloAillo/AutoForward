@@ -3,6 +3,10 @@ import { cacheStorage, prismaStorage } from "../../../index.ts"
 import { downloadMedia } from "../../helper/downloadMedia.ts"
 import { isCommand } from "../../helper/isCommand.ts"
 import { directCommand } from "./directCommand.ts"
+import { log } from "../../helper/logger.ts"
+
+const logID = "Message Handler"
+const verboseLogID = "message/messageHandler.ts"
 
 type messageHandlerType = {
     messages: WAMessage[],
@@ -10,43 +14,53 @@ type messageHandlerType = {
 }
 
 export async function messageHandler({ messages, type }: messageHandlerType) {
+    log.debug(verboseLogID, `messages.upsert fired: type=${type}, count=${messages.length}`)
+
     if (type !== "notify") return
 
     for (const msg of messages) {
-        if (msg.key.fromMe) continue
+        log.debug(verboseLogID, `Message key: fromMe=${msg.key.fromMe}, remoteJid=${msg.key.remoteJid}, id=${msg.key.id}`)
+        log.debug(verboseLogID, `Message content types: ${Object.keys(msg.message || {})}`)
+
+        if (msg.key.fromMe) {
+            log.debug(verboseLogID, "Skipped: msg.key.fromMe is true")
+            continue
+        }
 
         const key = msg.key
 
         // identifier properties
         const isGroup = isJidGroup(key.remoteJid ?? "")
-        const pn = jidDecode(key.participantAlt ?? key.remoteJidAlt)?.user
         const isDirect = isCommand(msg.message?.conversation ?? "")
         const converstation = msg.message?.conversation?.trim()
         const contentType = getContentType(msg.message ?? undefined)
-
-        if (!pn) continue
-
+        
         // AutoForward
         // direct command from admin
-        if (pn === process.env.ADMIN_NUMBER && !isGroup && converstation) {
-            if (isDirect) 
-                directCommand(msg, converstation)
+        if (!isGroup && converstation && isDirect) {
+            const rawJid = [key.remoteJidAlt, key.remoteJid].find(jid => jid?.endsWith("@s.whatsapp.net")) ?? ""
+            const senderPn = jidDecode(rawJid)?.user
+
+            if (senderPn === process.env.ADMIN_NUMBER) {
+                log.debug(verboseLogID, "Message comes from ADMIN_NUMBER, executing directCommand...")
+                await directCommand(msg, converstation)
+            }
         }
 
         // listening group
         if (isGroup && msg.key.remoteJid) {
             try {
+                log.debug(verboseLogID, "message comes from group chat, grabbing forward item if exist...")
+
                 const forwards = await prismaStorage.getForwards(msg.key.remoteJid)
                 
                 if (forwards.length > 0) {
                     let mediaPath: string | undefined = undefined
                     let mediaBase64: string | undefined = undefined
 
-                    console.log("TEST:", contentType)
-
                     // Handle media messages (images, videos, and documents)
                     if (contentType === "imageMessage" || contentType === "videoMessage" || contentType === "documentMessage" || contentType === "documentWithCaptionMessage") {
-                        console.log(`[messageHandler] Detected media type: ${contentType}`)
+                        log.debug(verboseLogID, `Detected media type: ${contentType}`)
                         
                         // Normalize documentWithCaptionMessage to documentMessage
                         const normalizedContentType = contentType === "documentWithCaptionMessage" ? "documentMessage" : contentType
@@ -54,13 +68,13 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
                         const mediaResult = await downloadMedia(msg, normalizedContentType)
                         
                         if (!mediaResult) {
-                            console.error("[messageHandler] Media download failed, skipping message")
+                            log.error(verboseLogID, "Media download failed, skipping message")
                             continue
                         }
 
                         mediaPath = mediaResult.filename
                         mediaBase64 = mediaResult.base64Url
-                        console.log(`[messageHandler] Media downloaded successfully: ${mediaPath}`)
+                        log.debug(verboseLogID, `Media downloaded successfully: ${mediaPath}`)
                     }
 
                     // Append to each forward's own chat history
@@ -72,14 +86,14 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
                                 mediaPath: mediaPath,
                                 mediaBase64: mediaBase64
                             })
-                            console.log(`[messageHandler] Message stored for forward item ${forward.id} from ${await cacheStorage.getGroupName(forward.listenId)}`)
+                            log.info(logID, `Message stored for forward item ${forward.id} from ${await cacheStorage.getGroupName(forward.listenId)}`)
                         } catch (error) {
-                            console.error(`[messageHandler] Failed to store message for forward item ${forward.id}:`, error)
+                            log.error(verboseLogID, `Failed to store message for forward item ${forward.id}:`, error)
                         }
                     }
                 }
             } catch (error) {
-                console.error("[messageHandler] Failed to process message:", error)
+                log.error(verboseLogID, "Failed to process message:", error)
             }
         }
     }

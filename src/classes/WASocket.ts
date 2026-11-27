@@ -6,6 +6,10 @@ import P from 'pino'
 import qrcode from 'qrcode-terminal'
 import { v4 as uuid } from 'uuid'
 import { EventEmitter } from "events";
+import { log } from "../helper/logger.ts";
+
+const logID = "WA Socket"
+const verboseLogID = "classes/WASocket.ts"
 
 export class WASocket extends EventEmitter {
     private socket!: BaileysSocket
@@ -18,6 +22,9 @@ export class WASocket extends EventEmitter {
     private isInitialized = false
     private initPromise: Promise<void>
 
+    private status: "dead" | "connecting" | "open" | "qr" = "connecting"
+    private qrString: string | null = null
+
     constructor() {
         super()
 
@@ -27,7 +34,8 @@ export class WASocket extends EventEmitter {
         this.groupCache = new NodeCache({ stdTTL: groupCacheTTL, useClones: false })
         this.logger = P({ level: "silent" })
         this.initPromise = this.init().catch(err => {
-            console.error(`[ ${this.id} WASocket] Initialization failed:`, err)
+            this.status = "dead"
+            log.error(verboseLogID, "Initialization failed:", err)
             process.exit(1)
         })
     }
@@ -50,6 +58,7 @@ export class WASocket extends EventEmitter {
     }
 
     async init() {
+        this.status = "connecting"
         if (this.socket) {
             this.socket.ev.removeAllListeners('connection.update')
             this.socket.ev.removeAllListeners('creds.update')
@@ -100,28 +109,41 @@ export class WASocket extends EventEmitter {
 
         this.socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
             if (qr) {
+                this.status = "qr"
+                this.qrString = qr
                 qrcode.generate(qr, { small: true })
             }
 
+            if (connection === 'connecting') {
+                this.status = "connecting"
+            }
+
             if (connection === 'open') {
-                console.log(`[${this.id} WASocket] WhatsApp Connection Ready`)
+                this.status = "open"
+                this.qrString = null
+                log.info(logID, "WhatsApp Connection Ready")
 
                 // custom emit for recconection handling in external event service
                 this.emit("socket-ready")
             }
 
             if (connection === "close") {
+                this.qrString = null
                 const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
                 if (shouldReconnect) {
-                    console.log(`[${this.id} WASocket] Reconnecting... (status: ${statusCode})`)
+                    this.status = "connecting"
+                    log.warn(logID, `Reconnecting... (status: ${statusCode})`)
                     this.init().catch(err => {
-                        console.error(`[${this.id} WASocket] Reconnection failed:`, err)
+                        this.status = "dead"
+                        log.error(verboseLogID, "Reconnection failed:", err)
                         process.exit(1)
                     })
                 } else {
-                    console.log(`[WASocket ${this.id}] Logged out. Delete auth folder and restart.`)
+                    this.status = "dead"
+                    // intentional logID instead of verbose one. Its dedicated for normal user.
+                    log.error(logID, "Logged out. Delete auth folder and restart.")
                     process.exit(0)
                 }
             }
@@ -137,7 +159,17 @@ export class WASocket extends EventEmitter {
         return this.socket
     }
 
+    public getStatus(): "dead" | "connecting" | "open" | "qr" {
+        return this.status
+    }
+
+    public getQR(): string | null {
+        return this.qrString
+    }
+
     public async destroy() {
+        this.status = "dead"
+        this.qrString = null
         if (this.socket) {
             this.socket.ev.removeAllListeners('connection.update')
             this.socket.ev.removeAllListeners('creds.update')
@@ -146,6 +178,6 @@ export class WASocket extends EventEmitter {
             this.socket.end(undefined)
         }
         this.groupCache.close()
-        console.log(`[${this.id} WASocket] Cleanup complete`)
+        log.debug(verboseLogID, "Cleanup complete")
     }
 }

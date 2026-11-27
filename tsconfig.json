@@ -6,6 +6,8 @@
     "types": ["node"],
     "esModuleInterop": true,
     "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
 
     
     // Enable compilation output
@@ -28,6 +30,6 @@
     "sourceMap": false,
     "declaration": false
   },
-  "include": ["src/**/*", "*.ts", "src/helper/aiReadyFormatter.ts"],
+  "include": ["src/**/*", "watchdog/**/*", "*.ts", "src/helper/aiReadyFormatter.ts"],
   "exclude": ["node_modules", "dist"]
 }
