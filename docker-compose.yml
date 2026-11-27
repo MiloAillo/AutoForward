@@ -37,6 +37,44 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+    ports:
+      - "${INTERNAL_HTTP_PORT:-3001}:${INTERNAL_HTTP_PORT:-3001}"
+    networks:
+      - autoforward-network
+
+  # Sidecar that owns the Docker lifecycle. It stays up when the bot does not,
+  # so the dashboard can always start / stop / restart the bot container.
+  watchdog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autoforward-watchdog
+    restart: unless-stopped
+    entrypoint: ["npx", "tsx", "watchdog/index.ts"]
+    env_file:
+      - .env
+    environment:
+      - WATCHDOG_HTTP_PORT=${WATCHDOG_HTTP_PORT:-3002}
+      - BOT_CONTAINER_NAME=autoforward-bot
+      - DOCKER_SOCKET=/var/run/docker.sock
+    ports:
+      - "${WATCHDOG_HTTP_PORT:-3002}:${WATCHDOG_HTTP_PORT:-3002}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autoforward-network
+
+  # Static host for the built React dashboard (`npm run build` in web/).
+  dashboard:
+    image: nginx:alpine
+    container_name: autoforward-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-8080}:80"
+    volumes:
+      - ./web/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - watchdog
     networks:
       - autoforward-network
 

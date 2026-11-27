@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+    --color-canvas: #08090a;
+    --color-surface: #0e1012;
+    --color-surface-2: #14171a;
+    --color-surface-3: #1a1e22;
+    --color-line: #22262b;
+    --color-line-strong: #2f353b;
+    --color-ink: #e9ecef;
+    --color-muted: #949ca4;
+    --color-faint: #656d75;
+    --color-accent: #f97316;
+    --color-accent-soft: #fb923c;
+    --color-ok: #34d399;
+    --color-warn: #fbbf24;
+    --color-danger: #f87171;
+    --color-info: #60a5fa;
+
+    --radius-panel: 14px;
+}
+
+@layer base {
+    html {
+        color-scheme: dark;
+    }
+
+    body {
+        @apply bg-canvas text-ink font-sans antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+        color: #fff;
+    }
+
+    :focus-visible {
+        outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+        outline-offset: 2px;
+    }
+
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-line-strong) transparent;
+    }
+
+    *::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    *::-webkit-scrollbar-thumb {
+        background: var(--color-line-strong);
+        border-radius: 999px;
+    }
+
+    *::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+@layer utilities {
+    .panel {
+        @apply rounded-panel border border-line bg-surface;
+    }
+
+    .grid-dots {
+        background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.055) 1px, transparent 0);
+        background-size: 22px 22px;
+    }
+
+    .text-balance {
+        text-wrap: balance;
+    }
+
+    .animate-in {
+        animation: fade-rise 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .animate-pop {
+        animation: pop 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .shimmer {
+        background: linear-gradient(
+            90deg,
+            transparent,
+            color-mix(in oklab, var(--color-ink) 8%, transparent),
+            transparent
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.6s ease-in-out infinite;
+    }
+}
+
+@keyframes fade-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pop {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
