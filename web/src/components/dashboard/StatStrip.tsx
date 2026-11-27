@@ -101,30 +101,30 @@ export function StatStrip({
         >
             <StatCard
                 label="Next batch"
-                value={remaining !== null ? formatCountdown(remaining) : "--:--"}
-                sub={`every ${intervalMinutes} min`}
+                value={health ? (remaining !== null ? formatCountdown(remaining) : "--:--") : "—"}
+                sub={health ? `every ${intervalMinutes} min` : "—"}
                 icon={<Timer className="size-3.5" />}
-                progress={progress}
+                progress={health ? progress : undefined}
                 loading={loading}
             />
             <StatCard
                 label="Uptime"
                 value={liveUptimeSeconds !== null ? formatUptime(liveUptimeSeconds) : "—"}
-                sub={startedLabel}
+                sub={health ? startedLabel : "—"}
                 icon={<Clock3 className="size-3.5" />}
                 loading={loading}
             />
             <StatCard
                 label="Forwards"
-                value={String(forwards)}
-                sub={`${linkedRules} rule${linkedRules === 1 ? "" : "s"} linked`}
+                value={overview ? String(forwards) : "—"}
+                sub={overview ? `${linkedRules} rule${linkedRules === 1 ? "" : "s"} linked` : "—"}
                 icon={<GitBranch className="size-3.5" />}
                 loading={loading}
             />
             <StatCard
                 label="Rules"
-                value={String(rules)}
-                sub={`${linkedRules} in use`}
+                value={overview ? String(rules) : "—"}
+                sub={overview ? `${linkedRules} in use` : "—"}
                 icon={<ShieldCheck className="size-3.5" />}
                 loading={loading}
             />

@@ -7,6 +7,7 @@ import {
     Maximize2,
     Minus,
     Plus,
+    RotateCcw,
     Send,
     ShieldCheck,
     Trash2,
@@ -36,6 +37,29 @@ interface ForwardMapProps {
 const MIN_SCALE = 0.45
 const MAX_SCALE = 1.5
 
+const OFFSETS_KEY = "af:node-offsets"
+
+type OffsetMap = Map<string, { dx: number; dy: number }>
+
+function loadOffsets(): OffsetMap {
+    try {
+        const raw = localStorage.getItem(OFFSETS_KEY)
+        if (!raw) return new Map()
+        const entries: [string, { dx: number; dy: number }][] = JSON.parse(raw)
+        return new Map(entries)
+    } catch {
+        return new Map()
+    }
+}
+
+function saveOffsets(offsets: OffsetMap) {
+    if (offsets.size === 0) {
+        localStorage.removeItem(OFFSETS_KEY)
+    } else {
+        localStorage.setItem(OFFSETS_KEY, JSON.stringify([...offsets]))
+    }
+}
+
 export function ForwardMap({
     forwards,
     rules,
@@ -50,16 +74,26 @@ export function ForwardMap({
     disabledReason,
     busy
 }: ForwardMapProps) {
-    const layout = useMemo(() => buildGraph(forwards), [forwards])
+    const [nodeOffsets, setNodeOffsets] = useState<OffsetMap>(loadOffsets)
+    const layout = useMemo(() => buildGraph(forwards, nodeOffsets), [forwards, nodeOffsets])
     const containerRef = useRef<HTMLDivElement>(null)
 
     const [view, setView] = useState({ x: 16, y: 12, scale: 1 })
     const [selectedId, setSelectedId] = useState<number | null>(null)
     const [hoveredId, setHoveredId] = useState<number | null>(null)
     const [isDragging, setIsDragging] = useState(false)
+    const [isDraggingNode, setIsDraggingNode] = useState(false)
     const drag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(
         null
     )
+    const nodeDrag = useRef<{
+        pointerId: number
+        nodeKey: string
+        startX: number
+        startY: number
+        origDx: number
+        origDy: number
+    } | null>(null)
 
     const fit = useCallback(() => {
         const element = containerRef.current
@@ -135,7 +169,29 @@ export function ForwardMap({
         if (event.button !== 0) return
         if (forwards.length === 0) return
         const target = event.target as HTMLElement
-        if (target.closest("button, a, input, [data-node], [data-chip], [data-control]")) return
+
+        // Node drag — started on a [data-node] card
+        const nodeEl = target.closest("[data-node]") as HTMLElement | null
+        if (nodeEl) {
+            // Don't drag if clicking interactive elements inside the node
+            if (target.closest("button, a, input, [data-chip], [data-control]")) return
+            const key = nodeEl.getAttribute("data-node") ?? ""
+            if (!key) return
+            const existing = nodeOffsets.get(key)
+            nodeDrag.current = {
+                pointerId: event.pointerId,
+                nodeKey: key,
+                startX: event.clientX,
+                startY: event.clientY,
+                origDx: existing?.dx ?? 0,
+                origDy: existing?.dy ?? 0
+            }
+            event.currentTarget.setPointerCapture(event.pointerId)
+            setIsDraggingNode(true)
+            return
+        }
+
+        if (target.closest("button, a, input, [data-chip], [data-control]")) return
         drag.current = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -148,6 +204,19 @@ export function ForwardMap({
     }
 
     const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+        // Node dragging
+        const nd = nodeDrag.current
+        if (nd && nd.pointerId === event.pointerId) {
+            const dx = nd.origDx + (event.clientX - nd.startX) / view.scale
+            const dy = nd.origDy + (event.clientY - nd.startY) / view.scale
+            setNodeOffsets((prev) => {
+                const next = new Map(prev)
+                next.set(nd.nodeKey, { dx, dy })
+                return next
+            })
+            return
+        }
+        // Canvas panning
         const current = drag.current
         if (!current || current.pointerId !== event.pointerId) return
         setView((state) => ({
@@ -158,6 +227,20 @@ export function ForwardMap({
     }
 
     const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+        // Node drag end
+        const nd = nodeDrag.current
+        if (nd && nd.pointerId === event.pointerId) {
+            nodeDrag.current = null
+            setIsDraggingNode(false)
+            event.currentTarget.releasePointerCapture(event.pointerId)
+            // Persist offsets
+            setNodeOffsets((current) => {
+                saveOffsets(current)
+                return current
+            })
+            return
+        }
+        // Canvas drag end
         if (drag.current?.pointerId === event.pointerId) {
             const dist = Math.hypot(
                 event.clientX - drag.current.startX,
@@ -208,7 +291,7 @@ export function ForwardMap({
                 onPointerCancel={onPointerUp}
                 className={cn(
                     "grid-dots relative min-h-[420px] flex-1 touch-none select-none overflow-hidden bg-surface",
-                    forwards.length > 0 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : ""
+                    forwards.length > 0 ? (isDragging || isDraggingNode ? "cursor-grabbing" : "cursor-grab") : ""
                 )}
             >
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-2.5">
@@ -343,7 +426,7 @@ export function ForwardMap({
                             return (
                                 <div
                                     key={`${node.side}:${node.jid}`}
-                                    data-node
+                                    data-node={`${node.side}:${node.jid}`}
                                     style={{
                                         left: node.x,
                                         top: node.y,
@@ -487,6 +570,23 @@ export function ForwardMap({
                         >
                             <Maximize2 className="size-3" />
                         </button>
+                        {nodeOffsets.size > 0 && (
+                            <>
+                                <div className="mx-0.5 h-4 w-px bg-line" />
+                                <button
+                                    type="button"
+                                    aria-label="Reset node positions"
+                                    title="Reset node positions"
+                                    onClick={() => {
+                                        setNodeOffsets(new Map())
+                                        saveOffsets(new Map())
+                                    }}
+                                    className="grid size-7 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                                >
+                                    <RotateCcw className="size-3" />
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -558,7 +658,7 @@ export function ForwardMap({
                     </div>
                 ) : (
                     <p className="text-[11.5px] text-faint">
-                        Click a connection or a rule chip to manage it. Drag the canvas to pan, ⌘/Ctrl + scroll to
+                        Click a connection or a rule chip to manage it. Drag nodes to rearrange, drag the canvas to pan, ⌘/Ctrl + scroll to
                         zoom.
                     </p>
                 )}

@@ -86,6 +86,11 @@ export default function App() {
             if (kind === "stop") await watchdogApi.stop()
             if (kind === "restart") await watchdogApi.restart()
 
+            if (kind === "stop" || kind === "restart") {
+                health.reset()
+                overview.reset()
+            }
+
             toast({
                 title: `Bot ${kind === "start" ? "starting" : kind === "stop" ? "stopping" : "restarting"}`,
                 description: "The watchdog accepted the command. Status will update automatically.",
@@ -93,7 +98,7 @@ export default function App() {
             })
 
             window.setTimeout(() => {
-                health.refresh()
+                if (kind !== "stop") health.refresh()
                 logs.refresh()
                 watchdog.refresh()
             }, 2500)

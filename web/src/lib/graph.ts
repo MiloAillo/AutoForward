@@ -48,7 +48,7 @@ const PAD_Y = 44
 const ROW_GAP = 26
 const MIN_WIDTH = 860
 
-export function buildGraph(forwards: Forward[]): GraphLayout {
+export function buildGraph(forwards: Forward[], offsets?: Map<string, { dx: number; dy: number }>): GraphLayout {
     const listenJids: string[] = []
     const sendJids: string[] = []
     const listenCount = new Map<string, number>()
@@ -117,6 +117,18 @@ export function buildGraph(forwards: Forward[]): GraphLayout {
         nodes.push(node)
         nodeMap.set(`send:${jid}`, node)
     })
+
+    // Apply user drag offsets
+    if (offsets) {
+        for (const node of nodes) {
+            const key = `${node.side}:${node.jid}`
+            const offset = offsets.get(key)
+            if (offset) {
+                node.x += offset.dx
+                node.y += offset.dy
+            }
+        }
+    }
 
     const edges: GraphEdge[] = []
     for (const forward of forwards) {
