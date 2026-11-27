@@ -19,6 +19,8 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
     for (const msg of messages) {
         if (msg.key.fromMe) continue
 
+        log.debug(verboseLogID, "Message received")
+
         const key = msg.key
 
         // identifier properties
@@ -34,6 +36,7 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
             const senderPn = jidDecode(rawJid)?.user
 
             if (senderPn === process.env.ADMIN_NUMBER) {
+                log.debug(verboseLogID, "Message comes from ADMIN_NUMBER, executing directCommand...")
                 await directCommand(msg, converstation)
             }
         }
@@ -41,6 +44,8 @@ export async function messageHandler({ messages, type }: messageHandlerType) {
         // listening group
         if (isGroup && msg.key.remoteJid) {
             try {
+                log.debug(verboseLogID, "message comes from group chat, grabbing forward item if exist...")
+
                 const forwards = await prismaStorage.getForwards(msg.key.remoteJid)
                 
                 if (forwards.length > 0) {
