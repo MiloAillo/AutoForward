@@ -19,16 +19,23 @@ export class CacheStorage {
         let cachedGroups = this.groups.get<Record<string, GroupMetadata>>('groups');
 
         if (!cachedGroups) {
-            const sock = socket.getSocket();
-            if (!sock) {
-                throw new Error("Socket is not initialized or connected.");
-            }
+            try {
+                if (socket.getStatus() !== "open") {
+                    return {};
+                }
 
-            cachedGroups = await sock.groupFetchAllParticipating();
-            this.groups.set('groups', cachedGroups);
+                const sock = socket.getSocket();
+                if (!sock) return {};
+
+                cachedGroups = await sock.groupFetchAllParticipating();
+                this.groups.set('groups', cachedGroups);
+            } catch (err: any) {
+                console.warn(`[CacheStorage] Failed to fetch groups: ${err?.message || err}`);
+                return {};
+            }
         }
 
-        return cachedGroups;
+        return cachedGroups ?? {};
     }
 
     /**

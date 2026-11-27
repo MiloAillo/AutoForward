@@ -1,4 +1,5 @@
 import express from "express"
+import cors from "cors"
 import type { WASocket } from "../../classes/WASocket.ts"
 import type { PrismaStorage } from "../../classes/PrismaStorage.ts"
 import type { CacheStorage } from "../../classes/CacheStorage.ts"
@@ -11,7 +12,27 @@ import {
 
 const app = express()
 
+app.use(cors())
 app.use(express.json())
+
+/**
+ * Mirrors node-cron's `*\/N * * * *` schedule: the next minute boundary where
+ * `minute % N === 0`, at second zero.
+ */
+function nextBatchIso(intervalMinutes: number): string | null {
+    if (!Number.isFinite(intervalMinutes) || intervalMinutes < 1 || intervalMinutes > 59) return null
+
+    const next = new Date()
+    next.setSeconds(0, 0)
+    next.setMinutes(next.getMinutes() + 1)
+
+    for (let step = 0; step < 1440; step++) {
+        if (next.getMinutes() % intervalMinutes === 0) return next.toISOString()
+        next.setMinutes(next.getMinutes() + 1)
+    }
+
+    return null
+}
 
 export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage, cacheStorage: CacheStorage) {
     const port = Number(process.env.INTERNAL_HTTP_PORT) || 3001
@@ -26,12 +47,22 @@ export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage,
             const socketStatus = socket.getStatus()
             const dbStatus = await prismaStorage.checkHealth()
             const qr = socket.getQR()
+            const configuredInterval = parseInt(process.env.BATCH_FORWARD_INTERVAL_MINUTES || "30", 10)
+            const batchIntervalMinutes =
+                Number.isFinite(configuredInterval) && configuredInterval >= 1 && configuredInterval <= 59
+                    ? configuredInterval
+                    : 30
+            const uptimeSeconds = Math.floor(process.uptime())
 
             return res.status(200).json({
                 process: "running",
                 socketStatus,
                 dbStatus,
-                qr
+                qr,
+                startedAt: new Date(Date.now() - uptimeSeconds * 1000).toISOString(),
+                uptimeSeconds,
+                batchIntervalMinutes,
+                nextBatchAt: nextBatchIso(batchIntervalMinutes)
             })
         } catch (err: any) {
             return res.status(500).json({ error: err.message })
@@ -44,13 +75,16 @@ export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage,
             const [forwards, rules, groups] = await Promise.all([
                 prismaStorage.getForwards(),
                 prismaStorage.getRules(),
-                cacheStorage.getGroups()
+                cacheStorage.getGroups().catch((e) => {
+                    console.warn(`[api] Failed to fetch groups: ${e?.message}`)
+                    return {}
+                })
             ])
 
             return res.status(200).json({
                 forwards,
                 rules,
-                groups
+                groups: groups ?? {}
             })
         } catch (err: any) {
             return res.status(500).json({ error: err.message })
@@ -60,8 +94,8 @@ export function startInternalAPI(socket: WASocket, prismaStorage: PrismaStorage,
     // Groups
     app.get("/groups", async (_req, res) => {
         try {
-            const data = await cacheStorage.getGroups()
-            return res.status(200).json({ data })
+            const data = await cacheStorage.getGroups().catch(() => ({}))
+            return res.status(200).json({ data: data ?? {} })
         } catch (err: any) {
             return res.status(500).json({ error: err.message })
         }

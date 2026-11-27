@@ -3,7 +3,7 @@ import type { aiReadyFormatter } from "../../helper/aiReadyFormatter.ts";
 import { modelProvider, prismaStorage } from "../../../index.ts";
 import { forwardMessages, sendMediaWithCaption, writeMessages } from "../message/messageSender.ts";
 import type { WAMessage } from "@whiskeysockets/baileys";
-import { notifyAdmin } from "../../helper/notifyAdmin.js";
+import { notifyAdmin } from "../../helper/notifyAdmin.ts";
 
 type ForwardContext = Awaited<ReturnType<typeof aiReadyFormatter>>
 

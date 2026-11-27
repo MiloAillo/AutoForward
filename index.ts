@@ -1,12 +1,8 @@
-import { getContentType, isJidGroup, jidDecode } from "@whiskeysockets/baileys";
 import { WASocket } from "./src/classes/WASocket.ts";
-import { isCommand } from "./src/helper/isCommand.ts";
-import { directCommand } from "./src/autoForward/message/directCommand.ts";
 import { CacheStorage } from "./src/classes/CacheStorage.ts";
 import OpenAI from 'openai'
 import { PrismaStorage } from "./src/classes/PrismaStorage.ts";
 import { mkdir } from "fs/promises";
-import { downloadMedia } from "./src/helper/downloadMedia.ts";
 import { messageHandler } from "./src/autoForward/message/messageHandler.ts";
 import { msgCronBatchForward } from "./src/autoForward/cron/msgCronBatchForward.ts";
 import { msgCronCleanup } from "./src/autoForward/cron/msgCronCleanup.ts";
@@ -39,7 +35,7 @@ export const prismaStorage = new PrismaStorage()
 console.log("[index] PrismaStorage initialized")
 
 // start AutoForward Internal API for web UI
-startInternalAPI(socket, prismaStorage)
+startInternalAPI(socket, prismaStorage, cacheStorage)
 
 // The rest wait until WASocket properly started
 await socket.waitForConnection()
