@@ -233,4 +233,6 @@ DATABASE_URL="mysql://autoforward:password@localhost:3306/autoforward"
 
 ## License
 
-This project is provided as-is for educational and personal use.
+Released under the [MIT License](LICENSE).
+
+You are free to use, modify, and distribute this software, including commercially, as long as the copyright notice and license text are preserved. The software comes with no warranty.
